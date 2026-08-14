@@ -70,6 +70,9 @@ config:
   # saves settings — pointed at a shared index that wipes the other tenant.
   cacheUrl: ""
   cacheTimeout: 900
+  # -- Redis/Valkey port. Used in the NetworkPolicy egress rule so the rule
+  # matches the port in cacheUrl rather than always opening 6379.
+  cachePort: 6379
 
   # -- Storing the full text of every galley in Postgres and building GIN
   # indexes over it. Off by default: it is the dominant database-growth term.
@@ -258,6 +261,7 @@ cronJobs:
       enabled: true
       schedule: "*/5 * * * *"
       command: ["execute_cron_tasks"]
+      mountFiles: false
 
     # Reviewer and revision reminders. Guarded by SentReminder rows, so a
     # double-run does not double-send, but daily is the intended cadence.
@@ -265,6 +269,7 @@ cronJobs:
       enabled: true
       schedule: "0 7 * * *"
       command: ["send_reminders"]
+      mountFiles: false
 
     # Emails authors when their article is published. Has NO dedupe of its own,
     # so backoffLimit stays 0 — a retry would re-notify.
@@ -273,6 +278,7 @@ cronJobs:
       schedule: "0 23 * * *"
       command: ["send_publication_notifications"]
       backoffLimit: 0
+      mountFiles: false
 
     # sitemap.xml plus the per-issue and per-subject sitemaps, written to the
     # files volume and served from there.
@@ -292,6 +298,7 @@ cronJobs:
       enabled: true
       schedule: "15 2 * * *"
       command: ["clearsessions"]
+      mountFiles: false
 
     # Rolls per-access rows up into HistoricArticleAccess. ArticleAccess gets a
     # row per view AND per download, so it is the fastest-growing table.

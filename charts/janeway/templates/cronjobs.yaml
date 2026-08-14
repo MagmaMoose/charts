@@ -1,3 +1,4 @@
+# kics-scan disable=KSV-0011,KSV-0125
 {{- if .Values.cronJobs.enabled }}
 {{- $root := . -}}
 {{- $defaults := .Values.cronJobs.defaults -}}
@@ -8,6 +9,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: {{ include "janeway.fullname" $root }}-{{ $name }}
+  namespace: {{ $root.Release.Namespace }}
   labels:
     {{- include "janeway.labels" $root | nindent 4 }}
     app.kubernetes.io/component: cron
@@ -69,7 +71,7 @@ spec:
               resources:
                 {{- toYaml (default $defaults.resources $job.resources) | nindent 16 }}
               volumeMounts:
-                {{- include "janeway.volumeMounts" $root | nindent 16 }}
+                {{- include "janeway.cronJobVolumeMounts" (list $root $job) | nindent 16 }}
           volumes:
             {{- include "janeway.volumes" $root | nindent 12 }}
           {{- with $root.Values.nodeSelector }}

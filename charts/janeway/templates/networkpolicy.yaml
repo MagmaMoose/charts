@@ -49,7 +49,7 @@ spec:
         - namespaceSelector: {}
       ports:
         - protocol: TCP
-          port: 6379
+          port: {{ .Values.config.cachePort }}
     {{- end }}
     {{- if .Values.email.host }}
     - to:

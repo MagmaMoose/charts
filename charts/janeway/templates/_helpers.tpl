@@ -68,7 +68,7 @@ same database, so drift between them is a class of bug worth designing out.
 
 Secrets are referenced with secretKeyRef rather than interpolated, so no
 credential is ever written into the release manifest.
-*/}}
+
 Emits the LIST ITEMS only — the caller writes the `env:` key. That is what lets
 the bootstrap Job append its own entries to the same list instead of producing a
 second `env:` key, which would be a duplicate YAML mapping key and silently
@@ -153,6 +153,30 @@ be the read-only root filesystem.
 - name: files
   mountPath: /opt/janeway/src/transform/xsl
   subPath: xsl
+- name: tmp
+  mountPath: /tmp
+{{- end }}
+
+{{/*
+Volume mounts for CronJob pods. Accepts (list $root $job).
+Jobs that set mountFiles: false (DB-only tasks) skip the files PVC mounts to
+avoid triggering a RWO Multi-Attach error when a CronJob pod lands on a
+different node than the web pod.
+*/}}
+{{- define "janeway.cronJobVolumeMounts" -}}
+{{- $root := index . 0 -}}
+{{- $job  := index . 1 -}}
+{{- if ne $job.mountFiles false }}
+- name: files
+  mountPath: /opt/janeway/src/files
+  subPath: files
+- name: files
+  mountPath: /opt/janeway/src/media
+  subPath: media
+- name: files
+  mountPath: /opt/janeway/src/transform/xsl
+  subPath: xsl
+{{- end }}
 - name: tmp
   mountPath: /tmp
 {{- end }}

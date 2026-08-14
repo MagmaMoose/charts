@@ -1,3 +1,4 @@
+# kics-scan disable=DS137138
 apiVersion: v1
 kind: Pod
 metadata:

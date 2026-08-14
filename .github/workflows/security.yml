@@ -14,6 +14,10 @@ permissions:
   contents: read
   pull-requests: write
   security-events: write
+  # Chargate exchanges an OIDC token for its own bot identity so PR
+  # comments come from Chargate[bot]; without this it warns and falls back
+  # to github-actions[bot].
+  id-token: write
   # codeql-action/upload-sarif (and Chargate's status telemetry) read this run's
   # metadata via GET /actions/runs/{id}; without actions:read that 403s with
   # "Resource not accessible by integration" and the SARIF upload errors.
@@ -37,4 +41,4 @@ jobs:
           defectdojo_url: ${{ vars.MM_DEFECTDOJO_URL }}
           defectdojo_token: ${{ secrets.MM_DEFECTDOJO_API_KEY }}
           dependency_track_url: ${{ vars.MM_DEPENDENCY_TRACK_URL }}
-          dependency_track_token: ${{ secrets.MM_DEPENDENCY_TRACK_API_KEY }}
+          dependency_track_api_key: ${{ secrets.MM_DEPENDENCY_TRACK_API_KEY }}

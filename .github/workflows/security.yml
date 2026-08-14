@@ -1,10 +1,12 @@
-# Org Chargate security gate (MegaLinter-backed, net-new PR-diff gating),
-# consumed as the Chargate MARKETPLACE ACTION. It gates on net-new findings on
-# pull requests.
+# Org Chargate security gate (MegaLinter-backed, net-new PR-diff gating), consumed
+# as the Chargate MARKETPLACE ACTION. It gates on net-new findings on pull requests.
 #
-# pull_request only: the push-to-default baseline scan was dropped org-wide,
-# because every merge to the default branch (including Diatreme's own version-bump
-# and tag commits) otherwise kicks off a full MegaLinter run.
+# pull_request only: the push-to-default baseline scan was dropped. Every merge to
+# the default branch (including the Caldrith-managed and Diatreme version-bump/tag
+# commits) otherwise kicks off a full ~15-min MegaLinter run — the single biggest
+# source of wasted CI. PR-time net-new gating is retained; the default-branch
+# baseline SARIF on the Security tab is simply no longer refreshed (it needs GHAS on
+# private repos anyway, and the code_scanning ruleset gate is CodeQL, not chargate).
 name: Security
 
 on:
@@ -14,29 +16,22 @@ permissions:
   contents: read
   pull-requests: write
   security-events: write
-  # Chargate exchanges an OIDC token for its own bot identity so PR
-  # comments come from Chargate[bot]; without this it warns and falls back
-  # to github-actions[bot].
-  id-token: write
   # codeql-action/upload-sarif (and Chargate's status telemetry) read this run's
   # metadata via GET /actions/runs/{id}; without actions:read that 403s with
   # "Resource not accessible by integration" and the SARIF upload errors.
   actions: read
 
-concurrency:
-  group: security-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 jobs:
-  security:
-    name: security
-    runs-on: ${{ vars.SELFHOSTED_GITHUB_RUNNER || 'ubuntu-latest' }}
+  chargate:
+    # Runner routing, rendered by visibility — see `template_vars` at the top of
+    # settings.yml. Public repos get a literal `ubuntu-latest` (GitHub-hosted
+    # minutes are free on public repos, and this keeps them out of the self-hosted
+    # queue); private/internal repos get the SELFHOSTED_GITHUB_RUNNER expression,
+    # so blanking that variable is still the instant escape hatch if the
+    # self-hosted runners bomb out.
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0   # net-new diffing needs the merge base
-      - name: Chargate
-        uses: magmamoose/chargate@bebb4ed06ba774f6302232a27fcff62a5f70dc34 # v2.11.1
+      - uses: magmamoose/chargate@bebb4ed06ba774f6302232a27fcff62a5f70dc34 # v2.11.1
         with:
           defectdojo_url: ${{ vars.MM_DEFECTDOJO_URL }}
           defectdojo_token: ${{ secrets.MM_DEFECTDOJO_API_KEY }}

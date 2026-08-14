@@ -4,104 +4,74 @@
 # kics-scan disable=baee238e-1921-4801-9c3f-79ae1d7b2cbc
 name: Release
 
-# Versioning is Diatreme, exactly as in every other repo in the org: GitVersion
-# computes the next version from conventional commits, tags it, and publishes
-# the GitHub Release. This repo has no container image, so `image_name` is left
-# empty and Diatreme's image steps no-op — the artefact is a Helm chart.
+# Diatreme release workflow (one image-aware template for the whole org).
 #
-# Charts are published as OCI artifacts to the same registry as the org's
-# images, so there is no chart repository, no index.yaml, and no gh-pages branch
-# to keep alive. `helm install oci://ghcr.io/magmamoose/charts/janeway` just
-# works, and Flux can point a `type: oci` HelmRepository straight at it.
+# Detects a container build (docker-bake.hcl / Dockerfile):
+#   - pull_request: image repos run `mode: ci` -> BUILD + push a pr-<N> image to
+#     GHCR, so the build is verified BEFORE merge. Non-image repos no-op (the
+#     required `diatreme` check passes trivially).
+#   - push to the default branch: `mode: release` -> version + GitHub Release;
+#     image repos also promote the image.
 #
-# One version for the repository, applied to every chart in it. That is honest
-# while this is effectively a single-chart repo; if a second chart arrives and
-# they need to move independently, switch to release-please with per-chart
-# packages rather than bolting per-chart tags onto GitVersion.
+# versioning-tool defaults to gitversion (language-agnostic). Per-repo overrides:
+#   - Python: versioning-tool: semantic-release-python (+ a pyproject config).
+#   - Node:   versioning-tool: semantic-release-npm.
+#   - Non-`main` default branch (e.g. master): set on.push.branches to match.
+#
+# All actions are SHA-pinned (Chargate's pre-commit hook enforces this); the
+# trailing `# vX.Y.Z` comment tracks the tag each pinned SHA corresponds to.
 
 on:
+  pull_request:
   push:
     branches: [main]
     paths-ignore:
       - '**/*.md'
+      - docs/**
+      - mkdocs.yml
       - LICENSE
       - .gitignore
   workflow_dispatch:
-    inputs:
-      version-override:
-        description: 'Explicit version e.g. v0.2.0. Blank = compute from commits.'
-        required: false
-        default: ''
 
 permissions:
   contents: write     # version bump + tag on release
   id-token: write     # OIDC for the Diatreme public-app token broker
-  packages: write     # push the chart to GHCR
+  packages: write     # push the PR/release container image to GHCR
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: ${{ vars.SELFHOSTED_GITHUB_RUNNER || 'ubuntu-latest' }}
-    outputs:
-      released: ${{ steps.diatreme.outputs.released }}
-      version: ${{ steps.diatreme.outputs.version }}
+  diatreme:
+    # Same visibility-based routing as security.yml — see `template_vars` at the
+    # top of settings.yml.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: detect
+        shell: bash
+        # image_name is set only when the repo builds a container image; Diatreme
+        # gates all image steps on image_name != '', so non-image repos no-op.
+        run: |
+          if [ -f docker-bake.hcl ] || [ -f Dockerfile ]; then
+            echo "image_name=${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_name=" >> "$GITHUB_OUTPUT"
+          fi
+      # PR: verify the image builds (image repos only).
+      - if: github.event_name == 'pull_request' && steps.detect.outputs.image_name != ''
+        uses: magmamoose/diatreme@3103a8f7a077d8c60eb1602ae7bbd23e420d7cfd # v2.7.0
         with:
-          fetch-depth: 0   # GitVersion needs full history and tags
-
-      - id: diatreme
-        uses: magmamoose/diatreme@8d1f58c4cb273299a64502899d6c23300101172f # v2.7.0
+          mode: ci
+          image_name: ${{ steps.detect.outputs.image_name }}
+      # Default-branch push (or manual dispatch): version + release.
+      - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: magmamoose/diatreme@3103a8f7a077d8c60eb1602ae7bbd23e420d7cfd # v2.7.0
         with:
           mode: release
           versioning-tool: gitversion
           environment: prod
           environments: '["prod"]'
           prerelease-identifiers: '{}'
-          version-override: ${{ github.event_name == 'workflow_dispatch' && inputs.version-override || '' }}
-          # No image in this repo — leaving this empty makes Diatreme skip every
-          # image step rather than trying to detect one.
-          image_name: ''
-
-      - if: steps.diatreme.outputs.released == 'true'
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-
-      - name: Log in to the registry
-        if: steps.diatreme.outputs.released == 'true'
-        env:
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY_USER: ${{ github.actor }}
-        run: echo "${REGISTRY_TOKEN}" | helm registry login ghcr.io --username "${REGISTRY_USER}" --password-stdin
-
-      - name: Package and push
-        if: steps.diatreme.outputs.released == 'true'
-        env:
-          VERSION: ${{ steps.diatreme.outputs.version }}
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          # Registry paths are case-sensitive and must be lower case; GitHub
-          # owner names are not.
-          repo="oci://ghcr.io/$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')/charts"
-          mkdir -p dist
-          for chart in charts/*/; do
-            name="$(basename "${chart}")"
-            # appVersion is NOT overridden. The chart version tracks this repo;
-            # appVersion names the application image tag and is bumped in
-            # Chart.yaml when that image is upgraded. Forcing them equal here
-            # would make every chart fix silently claim a new app version — and
-            # appVersion doubles as the default image tag, so it would then pull
-            # an image that does not exist.
-            helm package "${chart}" --version "${VERSION}" --destination dist
-            echo "packaged ${name} ${VERSION}"
-          done
-          for package in dist/*.tgz; do
-            helm push "${package}" "${repo}"
-          done
-
-      - name: Log out
-        if: always()
-        run: helm registry logout ghcr.io || true
+          image_name: ${{ steps.detect.outputs.image_name }}

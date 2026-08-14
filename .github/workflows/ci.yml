@@ -9,7 +9,7 @@ name: CI
 # self-hosted arm64 runners have no python3-venv, so it fails before it lints
 # anything. The two things it would have given us that matter — a chart version
 # increment check and per-chart lint — are implemented directly below, with no
-# Python dependency, so this job runs on either runner pool.
+# Python dependency.
 
 on:
   pull_request:
@@ -30,7 +30,16 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ${{ vars.SELFHOSTED_GITHUB_RUNNER || 'ubuntu-latest' }}
+    # Pinned to a GitHub-hosted runner rather than following the org's
+    # SELFHOSTED_GITHUB_RUNNER toggle, for one concrete reason: kubeconform
+    # fetches its JSON schemas over the network — `-schema-location default`
+    # resolves to raw.githubusercontent.com — and the self-hosted pool has no
+    # egress there. It does not degrade gracefully either; the Go resolver
+    # panics and the job dies with a stack trace rather than a useful error.
+    # (The same pool also lacks python3-venv, which is why chart-testing is not
+    # used here.) Nothing in this job needs cluster access, so a hosted runner
+    # costs only public minutes.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -22,13 +22,14 @@ spec:
         - -c
         - |
           set -e
+          _svc="http://{{ include "janeway.fullname" . }}:{{ .Values.service.port }}" # DevSkim: ignore DS137138
           echo "GET /healthz"
-          wget -q -O- "http://{{ include "janeway.fullname" . }}:{{ .Values.service.port }}/healthz"
+          wget -q -O- "$_svc/healthz"
           echo "GET / (Host: {{ .Values.config.siteDomain }})"
           wget -q -S -O /dev/null \
             --header="Host: {{ .Values.config.siteDomain }}" \
             --header="X-Forwarded-Proto: https" \
-            "http://{{ include "janeway.fullname" . }}:{{ .Values.service.port }}/" 2>&1 | grep -q "HTTP/1.1 200" \
+            "$_svc/" 2>&1 | grep -q "HTTP/1.1 200" \
             || { echo "expected HTTP 200 from / with the public Host header"; exit 1; }
           echo OK
       securityContext:

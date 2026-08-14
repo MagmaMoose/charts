@@ -9,9 +9,15 @@ type: application
 # require a chart change to be deployable.
 #
 # appVersion doubles as the default image tag (see _helpers.tpl janeway.image),
-# so it has to name a tag that tengen-systems/janeway has actually published.
-version: 0.1.0
-appVersion: "0.1.0"
+# so it has to name a tag that tengen-systems/janeway has ACTUALLY published —
+# hence the leading "v", which is unconventional for appVersion and deliberate.
+# That repo releases through Diatreme, which tags images `v<version>`, so
+# "0.1.0" resolved to ghcr.io/tengen-systems/janeway:0.1.0 — a tag that does not
+# exist, and whose symptom is every pod in ImagePullBackOff looking like a
+# credentials problem. The alternative is every consumer pinning image.tag by
+# hand, which is what the platform2 HelmRelease had to do.
+version: 0.1.1
+appVersion: "v0.0.1"
 
 home: https://janeway.systems
 sources:

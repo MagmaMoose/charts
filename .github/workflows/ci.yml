@@ -79,6 +79,11 @@ jobs:
       # the real Kubernetes API schemas. This catches what helm lint cannot see:
       # a misplaced key, a bad enum, an indentation error that still parses as
       # YAML but produces the wrong object.
+      # Built-in schemas only. The CRDs-catalog schema-location was dropped:
+      # these charts emit nothing but core/apps/batch/networking/policy kinds, so
+      # it resolved nothing, and on the self-hosted runners the lookup to
+      # raw.githubusercontent.com panics kubeconform outright with a Go DNS
+      # crash rather than degrading.
       - uses: yokawasa/action-setup-kube-tools@9e25a4277af127b60011c95b6ed2da7e3b3613b1 # v0.11.2
         with:
           setup-tools: kubeconform
@@ -97,7 +102,6 @@ jobs:
                 | kubeconform -strict -summary \
                     -kubernetes-version 1.33.0 \
                     -schema-location default \
-                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
                 || fail=1
               echo "::endgroup::"
             done

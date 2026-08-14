@@ -1,0 +1,17 @@
+# DS137138: Insecure URL
+# False positive: wget targets in the helm-test Pod are internal ClusterIP endpoints
+# on port 8000. HTTPS does not apply to intra-cluster traffic; the URL is not
+# externally reachable.
+DS137138
+
+# KSV-0011 / KSV0011: CPU limits not set
+# Intentional: CPU is a compressible resource; a hard limit buys throttled p99
+# latency rather than protection. Memory limits are set. See values.yaml.
+KSV-0011
+KSV0011
+
+# KSV-0125 / KSV0125: Container using an image from an untrusted registry
+# False positive: ghcr.io/tengen-systems/janeway is the intended image source
+# for this chart; the chart exists to deploy Janeway from that registry.
+KSV-0125
+KSV0125

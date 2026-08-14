@@ -17,7 +17,7 @@ type: application
 # credentials problem. The alternative is every consumer pinning image.tag by
 # hand, which is what the platform2 HelmRelease had to do.
 version: 0.1.1
-appVersion: "v0.0.1"
+appVersion: "v0.0.2"
 
 home: https://janeway.systems
 sources:

@@ -1,0 +1,31 @@
+misconfigurations:
+  # DS137138: Insecure URL — false positive. These wget targets are internal
+  # cluster http:// endpoints (ClusterIP on port 8000). HTTPS does not apply
+  # to intra-cluster traffic; the URL is not reachable from outside the cluster.
+  - id: DS137138
+    paths:
+      - charts/janeway/templates/tests/test-connection.yaml
+
+  # KSV0011 / KSV-0011: No CPU limits — intentional. CPU is a compressible
+  # resource; a hard limit buys throttled p99s rather than protection. Memory
+  # limits are set; see values.yaml for the full reasoning.
+  - id: KSV0011
+    paths:
+      - charts/janeway/templates/cronjobs.yaml
+      - charts/janeway/templates/deployment.yaml
+  - id: KSV-0011
+    paths:
+      - charts/janeway/templates/cronjobs.yaml
+      - charts/janeway/templates/deployment.yaml
+
+  # KSV0125 / KSV-0125: Untrusted image registry — false positive.
+  # ghcr.io/tengen-systems/janeway is the intended image source for this chart;
+  # the chart exists precisely to deploy Janeway from that registry.
+  - id: KSV0125
+    paths:
+      - charts/janeway/templates/cronjobs.yaml
+      - charts/janeway/templates/deployment.yaml
+  - id: KSV-0125
+    paths:
+      - charts/janeway/templates/cronjobs.yaml
+      - charts/janeway/templates/deployment.yaml

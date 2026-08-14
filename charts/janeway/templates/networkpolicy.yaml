@@ -1,0 +1,70 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "janeway.fullname" . }}
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "janeway.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- if .Values.networkPolicy.ingressFrom }}
+        {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
+        {{- else }}
+        # No selectors given: allow the whole cluster to reach the web port.
+        # Restrictive on egress, permissive on ingress, because the thing that
+        # dials this Service (an ingress controller or a tunnel daemon) lives in
+        # a namespace the chart cannot know.
+        - namespaceSelector: {}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # DNS. Without this rule nothing else in the list can work, because every
+    # other destination here is named rather than addressed.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.database.port }}
+    {{- if .Values.config.cacheUrl }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.config.cachePort }}
+    {{- end }}
+    {{- if .Values.email.host }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.email.port }}
+    {{- end }}
+    # Janeway reaches out to Crossref, ORCID, ROR and DOAJ over HTTPS for DOI
+    # registration and metadata lookups, so a policy without egress 443 breaks
+    # deposits in ways that only show up days later.
+    - ports:
+        - protocol: TCP
+          port: 443
+    {{- with .Values.networkPolicy.egress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

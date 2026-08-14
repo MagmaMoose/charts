@@ -1,0 +1,139 @@
+name: CI
+
+# Chart validation on every PR. Deliberately does NOT need a cluster: the charts
+# here deploy images from private registries, so `ct install` would need pull
+# credentials threaded into kind for no extra signal over a server-side dry run.
+#
+# helm/chart-testing-action is NOT used, and that is not an oversight: it
+# bootstraps a Python virtualenv for yamllint and yamale, and the org's
+# self-hosted arm64 runners have no python3-venv, so it fails before it lints
+# anything. The two things it would have given us that matter — a chart version
+# increment check and per-chart lint — are implemented directly below, with no
+# Python dependency.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - LICENSE
+      - .gitignore
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # Pinned to a GitHub-hosted runner rather than following the org's
+    # SELFHOSTED_GITHUB_RUNNER toggle, for one concrete reason: kubeconform
+    # fetches its JSON schemas over the network — `-schema-location default`
+    # resolves to raw.githubusercontent.com — and the self-hosted pool has no
+    # egress there. It does not degrade gracefully either; the Go resolver
+    # panics and the job dies with a stack trace rather than a useful error.
+    # (The same pool also lacks python3-venv, which is why chart-testing is not
+    # used here.) Nothing in this job needs cluster access, so a hosted runner
+    # costs only public minutes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # the version-increment check diffs against the base
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: helm lint
+        run: |
+          set -euo pipefail
+          for chart in charts/*/; do
+            values=""
+            [ -f "${chart}ci/default-values.yaml" ] && values="--values ${chart}ci/default-values.yaml"
+            echo "::group::helm lint $(basename "${chart}")"
+            # shellcheck disable=SC2086
+            helm lint "${chart}" ${values}
+            echo "::endgroup::"
+          done
+
+      # A chart whose contents changed but whose version did not is invisible to
+      # every consumer pinning a semver range — they keep the old artifact and
+      # the fix appears not to have shipped.
+      - name: Chart version bumped when the chart changed
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for chart in charts/*/; do
+            name="$(basename "${chart}")"
+            git diff --quiet "${BASE}" HEAD -- "${chart}" && continue
+            old="$(git show "${BASE}:${chart}Chart.yaml" 2>/dev/null | grep -E '^version:' | awk '{print $2}' || true)"
+            new="$(grep -E '^version:' "${chart}Chart.yaml" | awk '{print $2}')"
+            if [ -z "${old}" ]; then
+              echo "ok: ${name} is new (${new})"
+            elif [ "${old}" = "${new}" ]; then
+              echo "::error file=${chart}Chart.yaml::${name} changed but version is still ${old}"
+              fail=1
+            else
+              echo "ok: ${name} ${old} -> ${new}"
+            fi
+          done
+          exit "${fail}"
+
+      # Render every chart with its CI values and validate the output against
+      # the real Kubernetes API schemas. This catches what helm lint cannot see:
+      # a misplaced key, a bad enum, an indentation error that still parses as
+      # YAML but produces the wrong object.
+      # Built-in schemas only. The CRDs-catalog schema-location was dropped:
+      # these charts emit nothing but core/apps/batch/networking/policy kinds, so
+      # it resolved nothing, and on the self-hosted runners the lookup to
+      # raw.githubusercontent.com panics kubeconform outright with a Go DNS
+      # crash rather than degrading.
+      - uses: yokawasa/action-setup-kube-tools@9e25a4277af127b60011c95b6ed2da7e3b3613b1 # v0.11.2
+        with:
+          setup-tools: kubeconform
+          kubeconform: '0.6.7'
+
+      - name: Render and validate
+        run: |
+          set -euo pipefail
+          fail=0
+          for chart in charts/*/; do
+            name="$(basename "${chart}")"
+            for values in "${chart}"ci/*-values.yaml; do
+              [ -e "${values}" ] || continue
+              echo "::group::${name} ($(basename "${values}"))"
+              helm template "${name}" "${chart}" --values "${values}" \
+                | kubeconform -strict -summary \
+                    -kubernetes-version 1.33.0 \
+                    -schema-location default \
+                || fail=1
+              echo "::endgroup::"
+            done
+          done
+          exit "${fail}"
+
+      # Every guard in _guards.tpl exists because the failure it prevents is slow
+      # to diagnose in a live cluster. If a refactor silently removes one, this
+      # is what notices.
+      - name: Guards still fire
+        run: |
+          set -euo pipefail
+          assert_fails() {
+            local desc="$1"; shift
+            if helm template t charts/janeway "$@" >/dev/null 2>&1; then
+              echo "::error::guard did not fire: ${desc}"
+              exit 1
+            fi
+            echo "ok: ${desc}"
+          }
+          creds=(--set database.existingSecret=d --set secretKey.existingSecret=s)
+          assert_fails "missing config.siteDomain" --set database.host=x "${creds[@]}"
+          assert_fails "missing database.host" --set config.siteDomain=a.b "${creds[@]}"
+          assert_fails "missing secretKey" --set config.siteDomain=a.b --set database.host=x --set database.existingSecret=d
+          assert_fails "RWO with replicaCount>1 and no node pinning" \
+            --set config.siteDomain=a.b --set database.host=x "${creds[@]}" --set replicaCount=3

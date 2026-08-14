@@ -1,0 +1,46 @@
+{{- $fullName := include "janeway.fullname" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+  annotations:
+    # The migration and bootstrap Jobs are Helm hooks and consume this via
+    # envFrom, so it has to exist before they run. Without the hook weight it
+    # would be applied in the main phase — after a pre-install hook — and the
+    # hook pod would sit in CreateContainerConfigError until Helm timed out.
+    #
+    # No hook-delete-policy: this is a normal release object as well, and
+    # deleting it after the hooks would leave the Deployment without its config.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+data:
+  JANEWAY_SITE_DOMAIN: {{ .Values.config.siteDomain | quote }}
+  JANEWAY_ALLOWED_HOSTS: {{ .Values.config.allowedHosts | quote }}
+  JANEWAY_URL_CONFIG: {{ .Values.config.urlConfig | quote }}
+  JANEWAY_CACHE_URL: {{ .Values.config.cacheUrl | quote }}
+  JANEWAY_CACHE_TIMEOUT: {{ .Values.config.cacheTimeout | quote }}
+  JANEWAY_ENABLE_FULL_TEXT_SEARCH: {{ ternary "1" "0" .Values.config.enableFullTextSearch | quote }}
+  JANEWAY_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  JANEWAY_HSTS_SECONDS: {{ .Values.config.hstsSeconds | quote }}
+  JANEWAY_CAPTCHA_TYPE: {{ .Values.config.captchaType | quote }}
+  JANEWAY_DEFAULT_FROM_EMAIL: {{ default (printf "noreply@%s" .Values.config.siteDomain) .Values.email.from | quote }}
+  {{- if .Values.email.host }}
+  JANEWAY_EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+  JANEWAY_EMAIL_HOST: {{ .Values.email.host | quote }}
+  JANEWAY_EMAIL_PORT: {{ .Values.email.port | quote }}
+  JANEWAY_EMAIL_USE_TLS: {{ ternary "1" "0" .Values.email.useTls | quote }}
+  JANEWAY_EMAIL_HOST_USER: {{ .Values.email.user | quote }}
+  {{- else }}
+  # No SMTP relay configured. The console backend prints mail to the pod log
+  # rather than failing at send time, which keeps registration and password
+  # reset diagnosable instead of silently broken.
+  JANEWAY_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+  {{- end }}
+  GUNICORN_WORKERS: {{ .Values.gunicorn.workers | quote }}
+  GUNICORN_THREADS: {{ .Values.gunicorn.threads | quote }}
+  GUNICORN_TIMEOUT: {{ .Values.gunicorn.timeout | quote }}
+  {{- range $key, $value := .Values.config.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

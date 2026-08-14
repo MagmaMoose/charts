@@ -1,0 +1,405 @@
+# Default values for the janeway chart.
+#
+# The defaults here are a working single-replica install. The two things that
+# have no sensible default and MUST be supplied are the database connection and
+# `config.siteDomain` — see the guards in templates/_guards.tpl, which fail
+# `helm template` rather than letting a broken release reach the cluster.
+
+image:
+  repository: ghcr.io/tengen-systems/janeway
+  # Empty means "use .Chart.AppVersion", so a chart bump moves the image with
+  # it. Pin here only to hold an image back from the chart's own version.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Replicas for the web Deployment.
+#
+# Read persistence.accessModes before raising this. With ReadWriteOnce every
+# replica must land on the same node, which is fine when nodeSelector pins them
+# there and broken otherwise — the second pod stays ContainerCreating forever on
+# a "Multi-Attach error". The chart's guards will not let you set both
+# replicaCount > 1 and a RWO volume without also setting a nodeSelector.
+replicaCount: 1
+
+# -- Deployment strategy.
+#
+# Recreate, not RollingUpdate, and deliberately so: with a ReadWriteOnce volume
+# a rolling update tries to start the new pod while the old one still holds the
+# volume, which deadlocks if they land on different nodes. Switch to
+# RollingUpdate only alongside ReadWriteMany.
+strategy:
+  type: Recreate
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+# -- Application configuration, rendered into a ConfigMap.
+config:
+  # -- The public FQDN. REQUIRED.
+  #
+  # Load-bearing three times over: it is DEFAULT_HOST (where unmatched requests
+  # are redirected), it is the CSRF trusted origin (login fails without it), and
+  # bootstrap.pressDomain defaults to it. It must also match the Press.domain
+  # row in the database — Janeway resolves tenancy on the Host header alone.
+  siteDomain: ""
+
+  # -- Comma-separated ALLOWED_HOSTS. Empty means "*", which upstream also
+  # defaults to. Tenancy is NOT enforced here (that is Press.domain), so
+  # narrowing this is defence in depth rather than access control.
+  allowedHosts: ""
+
+  # -- "path" puts journals at https://<siteDomain>/<code>/; "domain" gives each
+  # journal its own hostname, which then needs its own DNS and tunnel rule.
+  urlConfig: path
+
+  # -- Shared cache URL, e.g. redis://valkey.database.svc.cluster.local:6379/5.
+  #
+  # Empty falls back to a per-process in-memory cache, which is correct for a
+  # single replica but means cache invalidation only affects the worker that
+  # handled the request.
+  #
+  # ALWAYS give Janeway its own database index on a shared server. Django's
+  # RedisCache.clear() issues FLUSHDB, and Janeway calls it whenever an editor
+  # saves settings — pointed at a shared index that wipes the other tenant.
+  cacheUrl: ""
+  cacheTimeout: 900
+  # -- Redis/Valkey port. Used in the NetworkPolicy egress rule so the rule
+  # matches the port in cacheUrl rather than always opening 6379.
+  cachePort: 6379
+
+  # -- Storing the full text of every galley in Postgres and building GIN
+  # indexes over it. Off by default: it is the dominant database-growth term.
+  enableFullTextSearch: false
+
+  logLevel: INFO
+
+  # -- HSTS max-age in seconds. 0 disables. Close to irreversible for the
+  # duration once a browser has seen it, so it is opt-in.
+  hstsSeconds: 0
+
+  captchaType: simple_math
+
+  extraEnv: {}
+
+database:
+  # -- Hostname of the PostgreSQL server. REQUIRED.
+  host: ""
+  port: 5432
+  name: janeway
+  user: janeway
+  # -- Secret holding the password. Strongly preferred over `password`.
+  existingSecret: ""
+  existingSecretKey: password
+  # -- Plaintext password. Only for local testing; it lands in a Secret in the
+  # release manifest and therefore in Helm's release history.
+  password: ""
+
+email:
+  host: ""
+  port: 587
+  useTls: true
+  user: ""
+  existingSecret: ""
+  existingSecretKey: password
+  # -- From address. Defaults to noreply@<siteDomain>.
+  from: ""
+
+# -- Django SECRET_KEY.
+#
+# There is no default and there deliberately never will be. Upstream Janeway
+# hardcodes a real SECRET_KEY literal that is published in a public repository;
+# an install that does not override it boots and works while signing session
+# cookies and password-reset tokens with a key anyone can read. The image
+# refuses to start on that literal.
+secretKey:
+  existingSecret: ""
+  existingSecretKey: secret-key
+  value: ""
+
+# -- One-shot bootstrap: creates the Press, the first Journal and a superuser.
+#
+# Runs as a post-install/post-upgrade hook and is guarded on both sides —
+# install_janeway is skipped when a Press already exists, createsuperuser when
+# the account already exists — so re-running it is safe. It also re-runs
+# load_default_settings and install_plugins, which is how settings added by a
+# new Janeway release land.
+bootstrap:
+  enabled: true
+  pressName: Janeway
+  # -- Defaults to config.siteDomain. This is written into a database row ONCE;
+  # changing it later is an UPDATE, not a values change.
+  pressDomain: ""
+  pressContact: ""
+  journalCode: journal
+  journalName: Journal
+  journalDescription: ""
+  superuser:
+    email: ""
+    existingSecret: ""
+    existingSecretKey: password
+    password: ""
+
+# -- Schema migrations, as a pre-install/pre-upgrade hook.
+#
+# A hook rather than an initContainer on purpose: initContainers run once per
+# pod, so N replicas would race each other through 646 migrations.
+migration:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 1800
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+persistence:
+  # -- Janeway writes uploaded files with plain open() to BASE_DIR/files and
+  # BASE_DIR/media — it does not use django-storages, so object storage is not a
+  # drop-in and this volume is required for anything to survive a restart.
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+
+# -- Ingress. Off by default: the intended exposure is a tunnel dialling the
+# ClusterIP Service directly, and an Ingress would be a second door.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 768Mi
+  limits:
+    # -- No CPU limit by default. CPU is compressible, and a limit here buys
+    # throttled p99s rather than protection. Memory limit == request keeps the
+    # pod out of the kubelet's eviction path.
+    memory: 768Mi
+
+gunicorn:
+  workers: 3
+  threads: 4
+  timeout: 120
+
+# -- Probes.
+#
+# Liveness hits /healthz, which the image short-circuits ahead of all the
+# tenancy middleware, so a database blip does not restart healthy pods.
+# Readiness hits /, carrying the public Host header so it genuinely exercises
+# Press resolution — without that header the response is a 302 to DEFAULT_HOST,
+# which kubelet counts as success while the site is in fact unconfigured.
+probes:
+  startup:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    # 5s x 60 = 5 minutes. The first request pays for the plugin scan and
+    # template warm-up, and this runs on arm64 nodes.
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# -- Scheduled tasks, one CronJob each.
+#
+# Upstream's own scheduler is `execute_cron_tasks`, which bundles five commands
+# on one timer. They are split here because they want different cadences, and
+# because a single bundled failure hides the others.
+#
+# Every entry takes: enabled, schedule, command (argv passed to `manage`),
+# and optionally concurrencyPolicy / activeDeadlineSeconds / suspend.
+cronJobs:
+  enabled: true
+  # Applied to every job unless overridden per job.
+  defaults:
+    concurrencyPolicy: Forbid
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 3
+    startingDeadlineSeconds: 300
+    backoffLimit: 1
+    activeDeadlineSeconds: 900
+    restartPolicy: Never
+    resources:
+      requests:
+        cpu: 50m
+        memory: 384Mi
+      limits:
+        memory: 512Mi
+
+  jobs:
+    # Drains the CronTask queue — the outbound email Janeway defers. This is the
+    # work that used to run inside every HTTP request via CronMiddleware.
+    execute-cron-tasks:
+      enabled: true
+      schedule: "*/5 * * * *"
+      command: ["execute_cron_tasks"]
+      mountFiles: false
+
+    # Reviewer and revision reminders. Guarded by SentReminder rows, so a
+    # double-run does not double-send, but daily is the intended cadence.
+    send-reminders:
+      enabled: true
+      schedule: "0 7 * * *"
+      command: ["send_reminders"]
+      mountFiles: false
+
+    # Emails authors when their article is published. Has NO dedupe of its own,
+    # so backoffLimit stays 0 — a retry would re-notify.
+    send-publication-notifications:
+      enabled: true
+      schedule: "0 23 * * *"
+      command: ["send_publication_notifications"]
+      backoffLimit: 0
+      mountFiles: false
+
+    # sitemap.xml plus the per-issue and per-subject sitemaps, written to the
+    # files volume and served from there.
+    generate-sitemaps:
+      enabled: true
+      schedule: "0 */4 * * *"
+      command: ["generate_sitemaps"]
+
+    generate-robots:
+      enabled: true
+      schedule: "30 3 * * *"
+      command: ["generate_robots"]
+
+    # Sessions live in the database (SESSION_ENGINE=utils.sessions.janeway_db)
+    # and nothing upstream prunes them, so the table grows without bound.
+    clear-sessions:
+      enabled: true
+      schedule: "15 2 * * *"
+      command: ["clearsessions"]
+      mountFiles: false
+
+    # Rolls per-access rows up into HistoricArticleAccess. ArticleAccess gets a
+    # row per view AND per download, so it is the fastest-growing table.
+    update-article-metrics:
+      enabled: false
+      schedule: "45 2 * * *"
+      command: ["update_article_metrics"]
+
+    # Crossref DOI deposit status.
+    poll-crossref:
+      enabled: false
+      schedule: "0 * * * *"
+      command: ["poll_crossref"]
+
+    # Research Organization Registry data. Large download; monthly upstream.
+    import-ror-data:
+      enabled: false
+      schedule: "47 2 3 * *"
+      command: ["import_ror_data"]
+      activeDeadlineSeconds: 3600
+      resources:
+        requests:
+          cpu: 200m
+          memory: 1Gi
+        limits:
+          memory: 2Gi
+
+    match-ror-ids:
+      enabled: false
+      schedule: "47 2 4 * *"
+      command: ["match_ror_ids"]
+      activeDeadlineSeconds: 3600
+
+    # Only meaningful with an iThenticate integration configured.
+    store-ithenticate-scores:
+      enabled: false
+      schedule: "*/30 * * * *"
+      command: ["store_ithenticate_scores"]
+
+    # Only when ENABLE_ENHANCED_MAILGUN_FEATURES is configured.
+    check-mailgun-stat:
+      enabled: false
+      schedule: "*/59 * * * *"
+      command: ["check_mailgun_stat"]
+
+    # Precomputes the press-wide search index. Only useful with
+    # config.enableFullTextSearch.
+    generate-site-search-data:
+      enabled: false
+      schedule: "0 4 * * *"
+      command: ["generate_site_search_data"]
+
+podDisruptionBudget:
+  # -- Off by default because the default is one replica, where a PDB can only
+  # block node drains.
+  enabled: false
+  minAvailable: 1
+
+autoscaling:
+  # -- Off by default and not merely unset: with a ReadWriteOnce volume, scaling
+  # up can only work if every replica lands on the same node.
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 75
+
+networkPolicy:
+  enabled: false
+  # -- Namespaces allowed to reach the web port, as label selectors.
+  ingressFrom: []
+  # -- Extra egress rules, appended to the DNS/database/cache ones the chart
+  # always emits when this is on.
+  egress: []
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  # Matches the volume's group so the non-root user can write to a freshly
+  # provisioned PVC.
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  # Everything Janeway writes at runtime is on the PVC or in the /tmp emptyDir
+  # the chart mounts. Note the bootstrap Job overrides this to false: it runs
+  # install_janeway, which calls build_assets, which compiles SCSS into the
+  # source tree.
+  readOnlyRootFilesystem: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+terminationGracePeriodSeconds: 60

@@ -1,0 +1,42 @@
+# kics-scan disable=DS137138
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "janeway.fullname" . }}-test-connection
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.37
+      # Two assertions, because either alone can pass on a broken install:
+      # /healthz proves the process serves, and / with the real Host header
+      # proves the Press row resolves. Without the Host header the second would
+      # be a 302 to DEFAULT_HOST, which looks like success.
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          _svc="http://{{ include "janeway.fullname" . }}:{{ .Values.service.port }}" # DevSkim: ignore DS137138
+          echo "GET /healthz"
+          wget -q -O- "$_svc/healthz"
+          echo "GET / (Host: {{ .Values.config.siteDomain }})"
+          wget -q -S -O /dev/null \
+            --header="Host: {{ .Values.config.siteDomain }}" \
+            --header="X-Forwarded-Proto: https" \
+            "$_svc/" 2>&1 | grep -q "HTTP/1.1 200" \
+            || { echo "expected HTTP 200 from / with the public Host header"; exit 1; }
+          echo OK
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop: [ALL]
+        seccompProfile:
+          type: RuntimeDefault

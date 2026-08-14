@@ -1,0 +1,37 @@
+# Values used by CI to render the chart. Not an example deployment — the point
+# is to exercise as many templates as possible, so things that are off by
+# default (ingress, PDB, NetworkPolicy, the optional CronJobs) are on here.
+config:
+  siteDomain: janeway.ci.example.com
+  cacheUrl: redis://valkey.database.svc.cluster.local:6379/9
+  enableFullTextSearch: true
+database:
+  host: postgres-rw.database.svc.cluster.local
+  existingSecret: janeway-db
+secretKey:
+  existingSecret: janeway-secret-key
+email:
+  host: smtp.example.com
+  existingSecret: janeway-smtp
+bootstrap:
+  superuser:
+    email: admin@example.com
+    existingSecret: janeway-superuser
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: janeway.ci.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+podDisruptionBudget:
+  enabled: true
+networkPolicy:
+  enabled: true
+cronJobs:
+  jobs:
+    poll-crossref:
+      enabled: true
+      schedule: "0 * * * *"
+      command: ["poll_crossref"]

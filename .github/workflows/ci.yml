@@ -1,0 +1,84 @@
+name: CI
+
+# Chart validation on every PR. Deliberately does NOT need a cluster: the charts
+# here deploy images from private registries, so `ct install` would need pull
+# credentials threaded into kind for no extra signal over a server-side dry run.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - LICENSE
+      - .gitignore
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ${{ vars.SELFHOSTED_GITHUB_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # chart-testing diffs against the base branch
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
+
+      - name: ct lint
+        run: ct lint --config ct.yaml
+
+      # Render every chart with its CI values and validate the output against
+      # the real Kubernetes API schemas. This is what catches the mistakes helm
+      # lint cannot see — a misplaced key, a bad enum, an indentation error that
+      # still parses as YAML.
+      - uses: yokawasa/action-setup-kube-tools@9e25a4277af127b60011c95b6ed2da7e3b3613b1 # v0.11.2
+        with:
+          setup-tools: kubeconform
+          kubeconform: '0.6.7'
+
+      - name: Render and validate
+        run: |
+          set -euo pipefail
+          fail=0
+          for chart in charts/*/; do
+            name="$(basename "$chart")"
+            for values in "$chart"ci/*-values.yaml; do
+              [ -e "$values" ] || continue
+              echo "::group::${name} ($(basename "$values"))"
+              helm template "$name" "$chart" --values "$values" \
+                | kubeconform -strict -summary \
+                    -kubernetes-version 1.33.0 \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+                || fail=1
+              echo "::endgroup::"
+            done
+          done
+          exit "$fail"
+
+      # Every guard in _guards.tpl exists because the failure it prevents is
+      # slow to diagnose in a cluster. If a refactor silently removes one, this
+      # is what notices.
+      - name: Guards still fire
+        run: |
+          set -euo pipefail
+          assert_fails() {
+            local desc="$1"; shift
+            if helm template t charts/janeway "$@" >/dev/null 2>&1; then
+              echo "::error::guard did not fire: ${desc}"
+              exit 1
+            fi
+            echo "ok: ${desc}"
+          }
+          base=(--set database.host=x --set database.existingSecret=d --set secretKey.existingSecret=s)
+          assert_fails "missing config.siteDomain" "${base[@]}"
+          assert_fails "missing database.host" --set config.siteDomain=a.b --set database.existingSecret=d --set secretKey.existingSecret=s
+          assert_fails "missing secretKey" --set config.siteDomain=a.b --set database.host=x --set database.existingSecret=d
+          assert_fails "RWO with replicaCount>1 and no node pinning" --set config.siteDomain=a.b "${base[@]}" --set replicaCount=3

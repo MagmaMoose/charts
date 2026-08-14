@@ -1,0 +1,33 @@
+{{- include "janeway.guards" . -}}
+Janeway {{ .Chart.AppVersion }} deployed as {{ include "janeway.fullname" . }}.
+
+  Site:     https://{{ .Values.config.siteDomain }}
+  Journal:  https://{{ .Values.config.siteDomain }}/{{ .Values.bootstrap.journalCode }}/
+  Manager:  https://{{ .Values.config.siteDomain }}/manager/
+
+{{ if .Values.bootstrap.enabled -}}
+The bootstrap hook creates the Press, the first Journal and — if
+bootstrap.superuser.email is set — a superuser. Watch it with:
+
+  kubectl -n {{ .Release.Namespace }} logs job/{{ include "janeway.fullname" . }}-bootstrap-{{ .Release.Revision }}
+
+{{ end -}}
+Check the rollout:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "janeway.fullname" . }}
+
+{{ if not .Values.config.cacheUrl -}}
+NOTE: config.cacheUrl is unset, so each worker caches in its own memory. That is
+fine for one replica, but cache invalidation — which Janeway triggers whenever an
+editor saves a setting — will only reach the worker that served the request.
+{{ end -}}
+{{ if and .Values.config.cacheUrl (not (regexMatch "/[0-9]+$" .Values.config.cacheUrl)) -}}
+WARNING: config.cacheUrl names no database index. Django's RedisCache.clear()
+issues FLUSHDB and Janeway calls it whenever an editor saves settings, so on a
+shared Redis/Valkey this will wipe whatever else is using index 0. Append an
+unused index, e.g. .../6
+{{ end -}}
+{{ if not .Values.email.host -}}
+NOTE: email.host is unset, so mail is printed to the pod log instead of sent.
+Registration and password reset will appear to work and deliver nothing.
+{{ end -}}

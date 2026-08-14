@@ -1,0 +1,107 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "janeway.fullname" . }}-bootstrap-{{ .Release.Revision }}
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bootstrap
+  annotations:
+    # post-install AND post-upgrade. The install_janeway half is guarded on
+    # `Press.objects.exists()` so it only ever runs once, but the job also
+    # re-runs load_default_settings and install_plugins, which is how settings
+    # introduced by a new Janeway release actually land.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        {{- include "janeway.labels" . | nindent 8 }}
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "janeway.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: bootstrap
+          image: {{ include "janeway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["bootstrap"]
+          securityContext:
+            {{- /*
+              readOnlyRootFilesystem is forced OFF here, and this is not an
+              oversight to tidy up later.
+
+              install_janeway calls build_assets, which compiles each theme's
+              SCSS into BASE_DIR/static and then runs collectstatic. Those are
+              writes into the image's own filesystem, not onto the volume. Worse,
+              the whole of install_janeway runs inside transaction.atomic(), so
+              the write failure rolls back the Press and Journal creation too —
+              leaving an empty database and a Job whose logs blame SCSS.
+
+              `set` rather than `merge`: sprig's merge is backed by mergo, which
+              treats false as an empty value and declines to override with it —
+              so `merge (dict "readOnlyRootFilesystem" false) $ctx` silently
+              leaves it true. That is exactly the bug this comment exists to
+              prevent, and it was caught by rendering the chart, not by lint.
+            */}}
+            {{- $ctx := deepCopy .Values.securityContext }}
+            {{- $_ := set $ctx "readOnlyRootFilesystem" false }}
+            {{- toYaml $ctx | nindent 12 }}
+          env:
+            {{- include "janeway.env" . | nindent 12 }}
+            - name: JANEWAY_PRESS_NAME
+              value: {{ .Values.bootstrap.pressName | quote }}
+            - name: JANEWAY_PRESS_DOMAIN
+              value: {{ include "janeway.pressDomain" . | quote }}
+            - name: JANEWAY_PRESS_CONTACT
+              value: {{ default (printf "admin@%s" .Values.config.siteDomain) .Values.bootstrap.pressContact | quote }}
+            - name: JANEWAY_JOURNAL_CODE
+              value: {{ .Values.bootstrap.journalCode | quote }}
+            - name: JANEWAY_JOURNAL_NAME
+              value: {{ .Values.bootstrap.journalName | quote }}
+            - name: JANEWAY_JOURNAL_DESCRIPTION
+              value: {{ .Values.bootstrap.journalDescription | quote }}
+            {{- if .Values.bootstrap.superuser.email }}
+            - name: DJANGO_SUPERUSER_EMAIL
+              value: {{ .Values.bootstrap.superuser.email | quote }}
+            - name: DJANGO_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-superuser" (include "janeway.fullname" .)) .Values.bootstrap.superuser.existingSecret }}
+                  key: {{ .Values.bootstrap.superuser.existingSecretKey }}
+            {{- end }}
+          envFrom:
+            {{- include "janeway.envFrom" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "janeway.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "janeway.volumes" . | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

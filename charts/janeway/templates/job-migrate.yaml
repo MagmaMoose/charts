@@ -1,0 +1,74 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Suffixed with the revision so each upgrade creates a new Job object rather
+  # than trying to patch an immutable one.
+  name: {{ include "janeway.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    # A Helm hook rather than an initContainer, deliberately. initContainers run
+    # once per pod, so with more than one replica they would race each other
+    # through 646 migrations; a hook runs exactly once per release.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    # Keep a failed Job so its logs can be read. before-hook-creation clears the
+    # previous one on the next attempt, so they do not accumulate.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "janeway.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "janeway.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "janeway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+          {{- include "janeway.env" . | nindent 12 }}
+          envFrom:
+          {{- include "janeway.envFrom" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          volumeMounts:
+            # The files volume is mounted even though this is "just" a schema
+            # migration: nine of Janeway's core migrations do filesystem work
+            # under BASE_DIR/files (0037 does os.makedirs then shutil.move into
+            # files/xsl). Without it the migration fails partway through.
+            {{- include "janeway.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "janeway.volumes" . | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

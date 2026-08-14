@@ -1,0 +1,49 @@
+apiVersion: v2
+name: janeway
+description: Janeway — an open-source platform for publishing journals, preprints, conference proceedings and books
+type: application
+
+# version is the CHART version and appVersion is the application version. They
+# are bumped independently on purpose: a chart-only fix (a probe tweak, a new
+# value) must not imply the application changed, and an image bump must not
+# require a chart change to be deployable.
+#
+# appVersion doubles as the default image tag (see _helpers.tpl janeway.image),
+# so it has to name a tag that tengen-systems/janeway has actually published.
+version: 0.1.0
+appVersion: "0.1.0"
+
+home: https://janeway.systems
+sources:
+  - https://github.com/MagmaMoose/charts
+  - https://github.com/tengen-systems/janeway
+  - https://github.com/openlibhums/janeway
+
+keywords:
+  - janeway
+  - publishing
+  - journal
+  - preprints
+  - open-access
+  - django
+
+maintainers:
+  - name: Caleb Sargeant
+    url: https://github.com/CalebSargeant
+
+# Upstream Janeway is AGPL-3.0; this chart is MIT (see LICENSE at the repo root).
+# Recorded because Artifact Hub surfaces it and the distinction matters for a
+# chart that deploys AGPL software.
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/category: office-business
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/links: |
+    - name: Janeway upstream
+      url: https://github.com/openlibhums/janeway
+    - name: Production image
+      url: https://github.com/tengen-systems/janeway
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial chart

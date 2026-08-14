@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "janeway.fullname" . }}
+  labels:
+    {{- include "janeway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      {{- toYaml (default (dict "maxUnavailable" 0 "maxSurge" 1) .Values.strategy.rollingUpdate) | nindent 6 }}
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "janeway.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      annotations:
+        # Roll the pods when configuration changes. Without this a values edit
+        # updates the ConfigMap and nothing restarts, so the change appears to
+        # have been applied while the running workers keep the old settings.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "janeway.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "janeway.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Long enough for an in-flight galley download to finish. Janeway streams
+      # files through Django rather than handing them to a file server, so a
+      # short grace period truncates a reader's download mid-transfer.
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: janeway
+          image: {{ include "janeway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["gunicorn"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+          {{- include "janeway.env" . | nindent 12 }}
+          envFrom:
+          {{- include "janeway.envFrom" . | nindent 12 }}
+          {{- if .Values.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            # /healthz is answered by a middleware that runs ahead of all the
+            # tenancy and session middleware, so this checks that the process is
+            # serving — not that the database is up. Restarting pods over a
+            # database blip helps nothing and turns a brief outage into a
+            # CrashLoopBackOff.
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            # Readiness DOES exercise the real path: the Host header makes
+            # SiteSettingsMiddleware resolve the Press, which is a database
+            # query. Without the header the response would be a 302 to
+            # DEFAULT_HOST, which kubelet counts as success — a pod that cannot
+            # serve a single real page would be marked Ready.
+            httpGet:
+              path: /
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ .Values.config.siteDomain | quote }}
+                # SECURE_PROXY_SSL_HEADER makes Django trust this for
+                # request.is_secure(). Without it the Press's "is secure" flag
+                # triggers a redirect to https:// and the probe follows nothing.
+                - name: X-Forwarded-Proto
+                  value: https
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "janeway.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "janeway.volumes" . | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

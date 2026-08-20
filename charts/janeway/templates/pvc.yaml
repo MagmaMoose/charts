@@ -15,11 +15,29 @@ metadata:
     # install, so the pod would stay Pending until Helm's hook timeout and the
     # install would fail with nothing useful in the logs. Weight -10 puts it
     # ahead of the ConfigMap and Secrets at -5 and the Jobs at 0.
-    helm.sh/hook: pre-install,pre-upgrade
+    # pre-install ONLY, never pre-upgrade. Helm's default hook-delete-policy is
+    # before-hook-creation, and it applies whether or not the annotation is
+    # written — so listing pre-upgrade here made Helm delete this claim at the
+    # start of every upgrade. The delete then blocked on the pvc-protection
+    # finalizer, because the running pod still had the volume mounted, and
+    # `helm upgrade` hung until its 20-minute timeout and rolled back. The chart
+    # could install but could never upgrade, and the claim was left with a
+    # deletionTimestamp — one pod eviction away from taking the journal's files
+    # with it.
+    #
+    # There is no hook-delete-policy meaning "never delete"; the only values are
+    # before-hook-creation, hook-succeeded and hook-failed. Not firing the hook
+    # on upgrade at all is what keeps the claim. It still exists by then, created
+    # at install, so the pre-upgrade migration Job mounts it normally.
+    #
+    # Consequence to know: edits to this claim (a size bump, say) are NOT applied
+    # by `helm upgrade`. Resizing is a deliberate operation — patch the PVC and
+    # let Longhorn expand it.
+    helm.sh/hook: pre-install
+    # Ahead of the ConfigMap and Secrets at -5 and the Jobs at 0.
     helm.sh/hook-weight: "-10"
-    # Deliberately NO helm.sh/hook-delete-policy. This claim holds every
-    # uploaded manuscript and published galley; it must survive both a failed
-    # install and a subsequent upgrade.
+    # Guards `helm uninstall` only — it has no bearing on hook deletion, which is
+    # what the hook annotation above is for.
     helm.sh/resource-policy: keep
     {{- with .Values.persistence.annotations }}
     {{- toYaml . | nindent 4 }}

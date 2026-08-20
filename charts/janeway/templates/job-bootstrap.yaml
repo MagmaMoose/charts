@@ -38,6 +38,10 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with (include "janeway.seedAssetsInitContainer" .) }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: bootstrap
           image: {{ include "janeway.image" . }}
@@ -49,11 +53,20 @@ spec:
               oversight to tidy up later.
 
               install_janeway calls build_assets, which compiles each theme's
-              SCSS into BASE_DIR/static and then runs collectstatic. Those are
-              writes into the image's own filesystem, not onto the volume. Worse,
-              the whole of install_janeway runs inside transaction.atomic(), so
-              the write failure rolls back the Press and Journal creation too —
-              leaving an empty database and a Job whose logs blame SCSS.
+              SCSS into BASE_DIR/static and then runs collectstatic into
+              BASE_DIR/collected-static. Both of those are now on the volume
+              (see janeway.generatedAssetMounts), which is what makes the output
+              outlive this Job — before that it went into the Job pod's own
+              filesystem and was discarded on exit, so a fresh install produced
+              override stylesheets that nothing ever saw.
+
+              What keeps this false is the rest of install_janeway: it runs
+              wholly inside transaction.atomic(), so ANY unanticipated write
+              into the source tree rolls back the Press and Journal creation
+              too, leaving an empty database and a Job whose logs blame SCSS.
+              That is a bad failure to trade for a hardening flag on a Job that
+              runs for thirty seconds. Tightening it wants a fresh-install test
+              against an empty database, not a values change.
 
               `set` rather than `merge`: sprig's merge is backed by mergo, which
               treats false as an empty value and declines to override with it —
@@ -93,6 +106,7 @@ spec:
             {{- toYaml .Values.migration.resources | nindent 12 }}
           volumeMounts:
             {{- include "janeway.volumeMounts" . | nindent 12 }}
+            {{- include "janeway.generatedAssetMounts" . | nindent 12 }}
       volumes:
         {{- include "janeway.volumes" . | nindent 8 }}
       {{- with .Values.nodeSelector }}

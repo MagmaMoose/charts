@@ -64,6 +64,10 @@ spec:
       # files through Django rather than handing them to a file server, so a
       # short grace period truncates a reader's download mid-transfer.
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with (include "janeway.seedAssetsInitContainer" .) }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: janeway
           image: {{ include "janeway.image" . }}
@@ -128,6 +132,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             {{- include "janeway.volumeMounts" . | nindent 12 }}
+            {{- include "janeway.generatedAssetMounts" . | nindent 12 }}
       volumes:
         {{- include "janeway.volumes" . | nindent 8 }}
       {{- with .Values.nodeSelector }}

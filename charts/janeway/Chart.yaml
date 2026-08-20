@@ -16,7 +16,7 @@ type: application
 # exist, and whose symptom is every pod in ImagePullBackOff looking like a
 # credentials problem. The alternative is every consumer pinning image.tag by
 # hand, which is what the platform2 HelmRelease had to do.
-version: 0.1.6
+version: 0.1.7
 appVersion: "v0.0.4"
 
 home: https://janeway.systems
@@ -51,5 +51,11 @@ annotations:
     - name: Production image
       url: https://github.com/tengen-systems/janeway
   artifacthub.io/changes: |
-    - kind: added
-      description: Initial chart
+    - kind: fixed
+      description: |
+        Per-journal theme customisation now works. src/static and
+        src/collected-static are mounted from the files volume and seeded from
+        the image by an init container, so `manage.py build_assets` can write
+        the per-journal override stylesheets that every theme template asks for.
+        Previously it died on a read-only filesystem, and the bootstrap Job's
+        copy was written into a pod that was then thrown away.

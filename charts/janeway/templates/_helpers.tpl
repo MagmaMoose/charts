@@ -158,6 +158,89 @@ be the read-only root filesystem.
 {{- end }}
 
 {{/*
+The generated-asset mounts, kept OUT of janeway.volumeMounts on purpose.
+
+build_assets writes the per-journal override CSS and the journal header images
+into static/, then collectstatic copies the lot into collected-static/, which is
+what WhiteNoise actually serves. Both are inside the image and so are read-only
+under securityContext.readOnlyRootFilesystem; putting them on the volume is what
+lets an editor theme a journal at all.
+
+Only the two workloads that run build_assets need them — the web Deployment, so
+an operator can run it, and the bootstrap Job, which runs it via install_janeway.
+They are separate from janeway.volumeMounts so that the invariant "these
+directories are mounted if and only if janeway.seedAssetsInitContainer has
+populated them" holds: a pod that mounted them without the init container would
+shadow the image's assets with an empty directory.
+*/}}
+{{- define "janeway.generatedAssetMounts" -}}
+{{- if .Values.generatedAssets.enabled }}
+- name: files
+  mountPath: /opt/janeway/src/static
+  subPath: static
+- name: files
+  mountPath: /opt/janeway/src/collected-static
+  subPath: collected-static
+{{- end }}
+{{- end }}
+
+{{/*
+Init container that seeds the generated-asset volumes from the image.
+
+The subPaths are mounted HERE at /seed rather than over their real locations on
+purpose: the image's own copy has to stay visible for the copy to have a source.
+The main container mounts the same two subPaths over src/static and
+src/collected-static.
+
+readOnlyRootFilesystem stays ON — the only thing this writes is the volume.
+*/}}
+{{- define "janeway.seedAssetsInitContainer" -}}
+{{- if .Values.generatedAssets.enabled }}
+- name: seed-assets
+  image: {{ include "janeway.image" . }}
+  imagePullPolicy: {{ .Values.image.pullPolicy }}
+  command:
+    - sh
+    - -ec
+    - |
+      # Copy the CONTENTS of an image directory onto its mounted counterpart.
+      #
+      # Overwriting, not `cp -n`: files/ and transform/xsl hold user data and
+      # must never be clobbered, but these hold build output that has to track
+      # the image, or an upgrade's new CSS would sit behind the previous
+      # release's copy for ever. Anything the image does not ship is untouched
+      # by a copy FROM the image, which is exactly the generated overrides.
+      #
+      # NOT `cp -a "$1/." "$2/"`. That also applies the source directory's
+      # timestamps to $2 itself, and $2 is a subPath mount root — created by
+      # kubelet, owned by root, group-writable to fsGroup. The container runs as
+      # a non-root user that does not own it, so the whole copy dies on:
+      #
+      #   cp: preserving times for '/seed/static/.': Operation not permitted
+      #
+      # `-T` so a re-run merges into the existing directory rather than nesting
+      # another copy inside it, and `find` rather than a shell glob so a
+      # top-level dotfile added upstream is not silently skipped.
+      seed() {
+        cd "$1" && find . -mindepth 1 -maxdepth 1 -exec cp -aT {} "$2"/{} \;
+      }
+      seed /opt/janeway/src/static           /seed/static
+      seed /opt/janeway/src/collected-static /seed/collected-static
+  securityContext:
+    {{- toYaml .Values.securityContext | nindent 4 }}
+  resources:
+    {{- toYaml .Values.generatedAssets.resources | nindent 4 }}
+  volumeMounts:
+    - name: files
+      mountPath: /seed/static
+      subPath: static
+    - name: files
+      mountPath: /seed/collected-static
+      subPath: collected-static
+{{- end }}
+{{- end }}
+
+{{/*
 Volume mounts for CronJob pods. Accepts (list $root $job).
 Jobs that set mountFiles: false (DB-only tasks) skip the files PVC mounts to
 avoid triggering a RWO Multi-Attach error when a CronJob pod lands on a

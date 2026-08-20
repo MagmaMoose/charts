@@ -30,6 +30,9 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "janeway.serviceAccountName" . }}
       automountServiceAccountToken: false
+      # Off for the same reason as the Deployment: no legacy Service env var
+      # injection. See deployment.yaml.
+      enableServiceLinks: false
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}

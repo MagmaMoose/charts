@@ -48,6 +48,9 @@ spec:
           {{- end }}
           serviceAccountName: {{ include "janeway.serviceAccountName" $root }}
           automountServiceAccountToken: false
+          # Off for the same reason as the Deployment: no legacy Service env var
+          # injection. See deployment.yaml.
+          enableServiceLinks: false
           {{- with $root.Values.cronJobs.priorityClassName }}
           priorityClassName: {{ . }}
           {{- end }}

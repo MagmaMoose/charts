@@ -16,7 +16,7 @@ type: application
 # exist, and whose symptom is every pod in ImagePullBackOff looking like a
 # credentials problem. The alternative is every consumer pinning image.tag by
 # hand, which is what the platform2 HelmRelease had to do.
-version: 0.1.2
+version: 0.1.3
 appVersion: "v0.0.3"
 
 home: https://janeway.systems

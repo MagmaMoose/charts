@@ -44,6 +44,17 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "janeway.serviceAccountName" . }}
       automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      # Off, and it must stay off. Kubernetes otherwise injects a legacy
+      # Docker-links env var pair into every container for each Service in the
+      # namespace, so the Service named `janeway` sets JANEWAY_PORT=tcp://<ip>:8000
+      # inside Janeway's own pods. Anything reading a JANEWAY_*-prefixed variable
+      # then gets a URL where it expected a value — which is exactly how the first
+      # rollout failed: gunicorn parsed the port as `tcp` and CrashLoopBackOff'd.
+      # The image no longer reads that name, but the injection is namespace-wide
+      # and silent, so the safe posture is to not receive it at all. Nothing here
+      # discovers peers through these variables; the chart addresses services by
+      # DNS.
+      enableServiceLinks: false
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}

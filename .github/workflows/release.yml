@@ -70,3 +70,49 @@ jobs:
           environments: '["prod"]'
           prerelease-identifiers: '{}'
           image_name: ${{ steps.detect.outputs.image_name }}
+
+      # Diatreme handles versioning and the GitHub Release. It does not know
+      # about Helm, so publishing the actual artefact of this repo is ours to
+      # do — without these steps a release tags a commit and ships nothing, and
+      # `helm show chart oci://ghcr.io/magmamoose/charts/<name>` returns "not
+      # found" for every version.
+      #
+      # Charts are published as OCI artifacts to the same registry as the org's
+      # images, so there is no chart repository, no index.yaml and no gh-pages
+      # branch to keep alive.
+      - if: steps.diatreme.outputs.released == 'true'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Log in to the registry
+        if: steps.diatreme.outputs.released == 'true'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: echo "${REGISTRY_TOKEN}" | helm registry login ghcr.io --username "${REGISTRY_USER}" --password-stdin
+
+      - name: Package and push charts
+        if: steps.diatreme.outputs.released == 'true'
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # Registry paths are case-sensitive and must be lower case; GitHub
+          # owner names are not.
+          repo="oci://ghcr.io/$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')/charts"
+          mkdir -p dist
+          for chart in charts/*/; do
+            # The version comes from each chart's own Chart.yaml, NOT from the
+            # repo's release version. Charts in a monorepo have to move
+            # independently, and CI already enforces that a chart whose contents
+            # changed also had its version bumped.
+            version="$(grep -E '^version:' "${chart}Chart.yaml" | awk '{print $2}')"
+            helm package "${chart}" --destination dist
+            echo "packaged $(basename "${chart}") ${version}"
+          done
+          for package in dist/*.tgz; do
+            helm push "${package}" "${repo}"
+          done
+
+      - name: Log out
+        if: always()
+        run: helm registry logout ghcr.io || true

@@ -302,10 +302,19 @@ cronJobs:
 
     # Rolls per-access rows up into HistoricArticleAccess. ArticleAccess gets a
     # row per view AND per download, so it is the fastest-growing table.
-    update-article-metrics:
+    #
+    # The command is `accesses_to_historic`. This key used to be
+    # `update-article-metrics` running a command of the same name, which does not
+    # exist in Janeway — `manage.py update_article_metrics` exits with
+    # "Unknown command", so the job failed on every run. It is disabled by
+    # default, so the breakage only surfaced where it had been switched on.
+    #
+    # Note it only rolls up records older than 24 months (COUNTER), so on a young
+    # journal it is a deliberate no-op rather than a job that does nothing wrong.
+    accesses-to-historic:
       enabled: false
       schedule: "45 2 * * *"
-      command: ["update_article_metrics"]
+      command: ["accesses_to_historic"]
 
     # Crossref DOI deposit status.
     poll-crossref:

@@ -98,7 +98,7 @@ the database and nothing upstream prunes them, which is why that last one
 matters.
 
 Eight more ship disabled because they need an integration or are expensive:
-`update-article-metrics`, `poll-crossref`, `import-ror-data`, `match-ror-ids`,
+`accesses-to-historic`, `poll-crossref`, `import-ror-data`, `match-ror-ids`,
 `store-ithenticate-scores`, `check-mailgun-stat`, `generate-site-search-data`.
 
 Enable, retime or add one from values:

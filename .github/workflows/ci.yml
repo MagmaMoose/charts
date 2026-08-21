@@ -93,7 +93,7 @@ jobs:
       # it resolved nothing, and on the self-hosted runners the lookup to
       # raw.githubusercontent.com panics kubeconform outright with a Go DNS
       # crash rather than degrading.
-      - uses: yokawasa/action-setup-kube-tools@9e25a4277af127b60011c95b6ed2da7e3b3613b1 # v0.11.2
+      - uses: yokawasa/action-setup-kube-tools@b16d49b2c459d33cf9d4c300a220ef0bcdbc730a # v0.14.0
         with:
           setup-tools: kubeconform
           kubeconform: '0.6.7'

@@ -1,0 +1,85 @@
+# Publishes each chart to GHCR as an OCI artifact.
+#
+# THIS LIVES IN ITS OWN FILE ON PURPOSE. These steps used to sit in
+# release.yml, and they have now been silently deleted twice by
+# `chore: provision required workflows (caldrith)`, which rewrites release.yml
+# from an org-wide template that knows nothing about Helm:
+#
+#   a45cda3  added the publish steps to release.yml
+#   339fcb9  provisioning rewrote release.yml, removing them again
+#
+# Each time, releases kept reporting success while publishing nothing, and
+# `helm show chart oci://ghcr.io/magmamoose/charts/<name>` returned "not found"
+# for the new version — a failure that is invisible until a Flux HelmRelease
+# cannot resolve the chart it was just told to use. Keeping this in a file the
+# provisioning process does not own is what stops that recurring.
+#
+# All actions are SHA-pinned; Chargate's pre-commit hook enforces it.
+name: Publish charts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+      - '.github/workflows/chart-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: chart-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Log in to the registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: echo "${REGISTRY_TOKEN}" | helm registry login ghcr.io --username "${REGISTRY_USER}" --password-stdin
+
+      - name: Package and push charts
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # Registry paths are case-sensitive and must be lower case; GitHub
+          # owner names are not.
+          repo="oci://ghcr.io/$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')/charts"
+          mkdir -p dist
+          for chart in charts/*/; do
+            # The version comes from each chart's own Chart.yaml, NOT from the
+            # repo's release version. Charts in a monorepo have to move
+            # independently, and CI already enforces that a chart whose contents
+            # changed also had its version bumped.
+            #
+            # Not gated on Diatreme's `released` output, deliberately: a push
+            # that bumps a chart but cuts no repo release would publish nothing
+            # while reporting success. Every push attempts a publish and
+            # already-published versions are skipped, so this is idempotent.
+            name="$(basename "${chart}")"
+            version="$(grep -E '^version:' "${chart}Chart.yaml" | awk '{print $2}')"
+            if helm show chart "${repo}/${name}" --version "${version}" >/dev/null 2>&1; then
+              echo "skip ${name} ${version} — already published"
+              continue
+            fi
+            helm package "${chart}" --destination dist
+            echo "packaged ${name} ${version}"
+          done
+          shopt -s nullglob
+          for package in dist/*.tgz; do
+            helm push "${package}" "${repo}"
+          done
+
+      - name: Log out
+        if: always()
+        run: helm registry logout ghcr.io || true

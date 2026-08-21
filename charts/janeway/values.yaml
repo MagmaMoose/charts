@@ -173,6 +173,52 @@ persistence:
   size: 10Gi
   annotations: {}
 
+# -- Janeway's generated theme assets.
+#
+# `manage.py build_assets` compiles every theme's SCSS into BASE_DIR/static and
+# then runs collectstatic into BASE_DIR/collected-static. Both live inside the
+# image, so with securityContext.readOnlyRootFilesystem the command dies on its
+# very first write:
+#
+#     OSError: [Errno 30] Read-only file system:
+#     '/opt/janeway/src/static/OLH/css/app.css'
+#
+# That command is the ONLY thing in Janeway that writes the per-journal
+# override stylesheets, and every OLH template requests them unconditionally:
+#
+#     <link href="{% static "OLH/css/journal" %}{{ request.journal.id }}_override.css" …>
+#
+# The failure is silent rather than loud, which is why it is worth this much
+# comment. Saving Styling in the journal Manager only writes database rows and
+# succeeds; the SCSS an editor drops in files/styling/ is on the volume and
+# survives. Nothing surfaces an error anywhere. The overrides simply 404 for
+# ever and the journal keeps the stock theme.
+#
+# So both directories are mounted from the files volume, and an init container
+# re-seeds them from the image on every start.
+#
+# `cp -a`, NOT the `cp -n` used for files/ and transform/xsl: those hold user
+# data that must never be overwritten, these hold build output that must track
+# the image, or an upgrade's new CSS would be shadowed by the old copy on the
+# volume for ever. Files the image does not ship — which is exactly the
+# generated overrides and journal header images — are not touched by a copy
+# FROM the image, so they survive.
+#
+# Turning this off restores the old behaviour: build_assets cannot run, and
+# per-journal theming does not work.
+generatedAssets:
+  enabled: true
+
+  # -- Resources for the seeding init container. It copies ~46 MB / ~1700 files
+  # and is done in well under a second; this is sized to not be the reason a
+  # pod fails to schedule.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
 service:
   type: ClusterIP
   port: 8000
@@ -401,9 +447,10 @@ securityContext:
     drop:
       - ALL
   # Everything Janeway writes at runtime is on the PVC or in the /tmp emptyDir
-  # the chart mounts. Note the bootstrap Job overrides this to false: it runs
-  # install_janeway, which calls build_assets, which compiles SCSS into the
-  # source tree.
+  # the chart mounts — including src/static and src/collected-static, which
+  # `manage.py build_assets` writes and which are on the volume for exactly that
+  # reason (see generatedAssets). Note the bootstrap Job still overrides this to
+  # false; job-bootstrap.yaml says why.
   readOnlyRootFilesystem: true
 
 nodeSelector: {}

@@ -152,6 +152,13 @@
         "annotations": { "type": "object" }
       }
     },
+    "generatedAssets": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "resources": { "type": "object" }
+      }
+    },
     "service": {
       "type": "object",
       "properties": {

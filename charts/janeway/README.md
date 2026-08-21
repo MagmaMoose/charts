@@ -26,7 +26,7 @@ The chart refuses to render without those — see [Guards](#guards).
 | Job (`pre-install`, `pre-upgrade`) | `manage.py migrate` |
 | Job (`post-install`, `post-upgrade`) | press, first journal, superuser, default settings, plugins |
 | CronJobs | scheduled tasks, one per job — six enabled by default |
-| PVC | uploaded manuscripts, galleys, media, XSL |
+| PVC | uploaded manuscripts, galleys, media, XSL, generated theme assets |
 | Service, optional Ingress, PDB, HPA, NetworkPolicy, ServiceAccount | |
 
 ## Things that will bite you
@@ -42,6 +42,28 @@ database `UPDATE`, not a values change.
 `BASE_DIR/files` and `BASE_DIR/media`. It does not use django-storages, so
 object storage is not a drop-in. Without `persistence.enabled` every uploaded
 manuscript and galley is lost on restart.
+
+**Theme changes need `build_assets`, and `build_assets` needs a restart.**
+Every theme template asks for `static/<theme>/css/journal<id>_override.css`
+unconditionally, and the only thing that ever writes that file is
+`manage.py build_assets`. It compiles into `src/static` and `src/collected-static`
+— both inside the image, both read-only under `readOnlyRootFilesystem`, so the
+command used to die on its first write. The chart now mounts them from the files
+volume and reseeds them from the image on every start, so:
+
+```bash
+kubectl -n janeway exec deploy/janeway -- python manage.py build_assets
+```
+
+works. Follow it with `kubectl -n janeway rollout restart deploy/janeway`:
+WhiteNoise indexes `STATIC_ROOT` once at startup (`WHITENOISE_AUTOREFRESH`
+follows `DEBUG`, which is off), so a file written into a running pod is not
+served until the next one starts.
+
+Nothing about this is loud when it is broken. Saving **Styling** in the journal
+Manager only writes database rows and succeeds; the SCSS an editor drops into
+`files/styling/journals/<id>/` sits on the volume untouched. The overrides just
+404 for ever and the journal keeps the stock theme.
 
 **`ReadWriteOnce` is per node, not per pod.** Several replicas can share one RWO
 volume, but only if they all schedule onto the same node. The chart refuses to
@@ -87,6 +109,7 @@ Worth setting early:
 | `config.enableFullTextSearch` | `false` | on = full galley text in Postgres, the dominant growth term |
 | `bootstrap.superuser.email` | `""` | no superuser is created without it |
 | `persistence.storageClass` | cluster default | |
+| `generatedAssets.enabled` | `true` | off = `build_assets` cannot run, no per-journal theming |
 | `nodeSelector` | `{}` | needed for multi-replica on RWO |
 
 ### CronJobs

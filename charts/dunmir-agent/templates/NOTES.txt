@@ -1,3 +1,4 @@
+{{- include "dunmir.guards" . -}}
 Dunmir agent {{ .Chart.AppVersion }} is rolling out as
   {{ include "dunmir.fullname" . }} in namespace {{ .Release.Namespace }}.
 

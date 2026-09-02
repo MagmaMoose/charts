@@ -15,3 +15,20 @@ KSV0011
 # for this chart; the chart exists to deploy Janeway from that registry.
 KSV-0125
 KSV0125
+
+# KSV-0020 / KSV0020: runAsUser should be > 10000
+# KSV-0021 / KSV0021: runAsGroup should be > 10000
+# Accepted risk: the dunmir-agent image runs as uid/gid 1000, which is the
+# image's dedicated non-root user. Raising it above 10000 would mismatch the
+# image's built-in user and break file ownership on the PVC mount.
+KSV-0020
+KSV0020
+KSV-0021
+KSV0021
+
+# KSV-0110 / KSV0110: Deployment should set metadata.namespace to a non-default namespace
+# False positive: Helm sets the namespace at install time via --namespace; the
+# chart deliberately omits it from the template so users are not locked into a
+# hardcoded namespace.
+KSV-0110
+KSV0110

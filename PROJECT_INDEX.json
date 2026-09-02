@@ -1,0 +1,57 @@
+{
+  "name": "magmamoose/charts",
+  "description": "Helm charts for MagmaMoose infrastructure, published as OCI artifacts to ghcr.io/magmamoose/charts.",
+  "charts": [
+    {
+      "name": "janeway",
+      "path": "charts/janeway",
+      "version": "0.1.8",
+      "appVersion": "v0.0.5",
+      "description": "Janeway — open-source platform for publishing journals, preprints, conference proceedings and books",
+      "upstream": "https://github.com/openlibhums/janeway",
+      "image": "ghcr.io/tengen-systems/janeway"
+    }
+  ],
+  "publishing": {
+    "type": "oci",
+    "registry": "ghcr.io/magmamoose/charts",
+    "versioning": "GitVersion via Diatreme, triggered by conventional-commit push to main"
+  },
+  "ci": {
+    "lint": "ct lint",
+    "render_validate": "helm template | kubeconform -strict -summary",
+    "workflows": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/chart-publish.yml",
+      ".github/workflows/release.yml",
+      ".github/workflows/security.yml"
+    ]
+  },
+  "conventions": [
+    "chart version and appVersion are bumped independently",
+    "appVersion is used as the default image tag (must match a real published tag)",
+    "guards in _guards.tpl fail helm template on misconfiguration rather than letting broken releases reach the cluster",
+    "values.schema.json validates types/enums; cross-field rules live in guards",
+    "comments explain WHY, not WHAT"
+  ],
+  "key_files": {
+    "charts/janeway/Chart.yaml": "chart metadata, version, appVersion, annotations",
+    "charts/janeway/values.yaml": "all tunable values with inline documentation",
+    "charts/janeway/values.schema.json": "JSON Schema for values type/enum validation",
+    "charts/janeway/templates/_helpers.tpl": "shared template helpers (name, image, env, volumes, mounts, init containers)",
+    "charts/janeway/templates/_guards.tpl": "preflight checks — fail fast on known bad configurations",
+    "charts/janeway/templates/deployment.yaml": "main web Deployment",
+    "charts/janeway/templates/job-migrate.yaml": "pre-install/pre-upgrade migration hook",
+    "charts/janeway/templates/job-bootstrap.yaml": "post-install/post-upgrade bootstrap hook (Press, Journal, superuser)",
+    "charts/janeway/templates/cronjobs.yaml": "scheduled tasks (execute-cron-tasks, send-reminders, etc.)",
+    "charts/janeway/templates/configmap.yaml": "non-secret application configuration",
+    "charts/janeway/templates/secret.yaml": "secret scaffolding",
+    "charts/janeway/templates/pvc.yaml": "files PersistentVolumeClaim",
+    "charts/janeway/templates/ingress.yaml": "optional Ingress",
+    "charts/janeway/templates/hpa.yaml": "optional HorizontalPodAutoscaler",
+    "charts/janeway/templates/pdb.yaml": "optional PodDisruptionBudget",
+    "charts/janeway/templates/networkpolicy.yaml": "optional NetworkPolicy",
+    "charts/janeway/templates/tests/test-connection.yaml": "helm test pod",
+    "charts/janeway/ci/default-values.yaml": "CI values — exercises all optional features for lint/render"
+  }
+}

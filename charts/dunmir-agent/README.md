@@ -61,9 +61,7 @@ secrets:
 
 git:
   sshKey: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    ...the deploy key the agent uses to push to the private repo...
-    -----END OPENSSH PRIVATE KEY-----
+    <paste the OpenSSH private key PEM block here>
   knownHosts: |
     github.com ssh-ed25519 AAAAC3...   # pin host keys ahead of first push
 ```

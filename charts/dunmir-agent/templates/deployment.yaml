@@ -1,0 +1,125 @@
+# Accepted risks for this workload chart (see per-id notes): writable state/tmp mounts
+# (b7652612), runAsUser matching the image's non-root uid (02323c00), image distributed by
+# tag not digest with IfNotPresent pull (caa3479d, 7c81d34c), LimitRange/ResourceQuota being
+# namespace-admin policies (4a20ebac, 48a5beba), and the envFrom secretRef credential model
+# (3d658f8b).
+# kics-scan disable=b7652612-de4e-4466-a0bf-1cd81f0c6063,02323c00-cdc3-4fdc-a310-4f2b3e7a1660,caa3479d-885d-4882-9aac-95e5e78ef5c2,7c81d34c-8e5a-402b-9798-9f442630e678,4a20ebac-1060-4c81-95d1-1f7f620e983b,48a5beba-e4c0-4584-a2aa-e6894e4cf424,3d658f8b-d988-41a0-a841-40043121de1e
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dunmir.fullname" . }}
+  labels:
+    {{- include "dunmir.labels" . | nindent 4 }}
+spec:
+  replicas: 1                           # HARD constraint — see chart README.
+  strategy:
+    type: Recreate                      # PVC is RWO; don't hold it during rollout.
+  selector:
+    matchLabels:
+      {{- include "dunmir.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dunmir.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when the rendered config or secrets change.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        # Confine the container with the runtime's default AppArmor profile.
+        container.apparmor.security.beta.kubernetes.io/agent: runtime/default
+    spec:
+      serviceAccountName: {{ include "dunmir.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: agent
+          image: {{ include "dunmir.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - run
+            - --config
+            - /etc/dunmir/config.yaml
+            {{- if gt (int .Values.verbosity) 0 }}
+            - {{ printf "-%s" (repeat (int .Values.verbosity) "v") | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "dunmir.secretName" . }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # /opt/dunmir/bin is on PATH; --help returns 0 when the entrypoint can load.
+          livenessProbe:
+            exec:
+              command: ["dunmir-agent", "--help"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["dunmir-agent", "--help"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dunmir
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/dunmir
+              readOnly: false
+            - name: tmp
+              mountPath: /tmp
+              readOnly: false
+            {{- if .Values.git.sshKey }}
+            # The git deploy key and known_hosts are mounted as a directory
+            # OUTSIDE the PVC. Using subPath under /var/lib/dunmir/.ssh
+            # would fail on a fresh PVC because the volume hides the image's
+            # pre-created .ssh dir. Configure git.remote.ssh_key_path to point
+            # at /etc/dunmir/ssh/git_deploy.
+            - name: git-ssh
+              mountPath: /etc/dunmir/ssh
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "dunmir.fullname" . }}-config
+        - name: state
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "dunmir.fullname" . }}-state
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.git.sshKey }}
+        - name: git-ssh
+          secret:
+            secretName: {{ include "dunmir.fullname" . }}-git-ssh
+            defaultMode: 0400
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

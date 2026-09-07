@@ -1,0 +1,33 @@
+annotations:
+  artifacthub.io/changes: |
+    - Chart: licence corrected to proprietary (it advertised Apache-2.0, which the agent is not offered under)
+    - Agent: periodic inventory_sync probe — reports CHR vs RouterBOARD, licence level, and /ip cloud name
+    - Agent: optional packet-loss / RTT ping probe feeding the health trend (set defaults.ping_target to enable)
+  # PROPRIETARY, corrected from Apache-2.0. The agent's source lives in the
+  # private MagmaMoose/dunmir under a proprietary root LICENSE, and the only
+  # Apache-2.0 carve-out there is backend/dunmir_control_plane/, which is the
+  # vendored control-plane core and not this. The image is published publicly
+  # so customers can run their own agent; that is a distribution decision and
+  # not a grant.
+  artifacthub.io/license: LicenseRef-Proprietary
+apiVersion: v2
+appVersion: 1.25.12
+description: 'Dunmir agent — runs from inside a Kubernetes cluster that has network
+  access to your MikroTik routers. Probes them over RouterOS API/SSH, captures /export
+  to a local git repo (optionally pushed to a private remote), pulls encrypted backups
+  via SFTP, and reports heartbeats and job results to the Dunmir control plane. '
+home: https://github.com/magmamoose/dunmir
+icon: https://avatars.githubusercontent.com/magmamoose
+keywords:
+- mikrotik
+- routeros
+- monitoring
+- backup
+- configuration-management
+maintainers:
+- name: Magmamoose
+name: dunmir-agent
+sources:
+- https://github.com/magmamoose/dunmir
+type: application
+version: 1.25.13

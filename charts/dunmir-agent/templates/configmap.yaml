@@ -1,0 +1,11 @@
+# Helm sets the namespace at apply time; disable the KICS "namespace undefined" query.
+# kics-scan disable=611ab018-c4aa-4ba2-b0f6-a448337509a6
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dunmir.fullname" . }}-config
+  labels:
+    {{- include "dunmir.labels" . | nindent 4 }}
+data:
+  config.yaml: |-
+    {{- toYaml .Values.config | nindent 4 }}

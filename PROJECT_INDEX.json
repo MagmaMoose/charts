@@ -10,6 +10,16 @@
       "description": "Janeway — open-source platform for publishing journals, preprints, conference proceedings and books",
       "upstream": "https://github.com/openlibhums/janeway",
       "image": "ghcr.io/tengen-systems/janeway"
+    },
+    {
+      "name": "dunmir-agent",
+      "path": "charts/dunmir-agent",
+      "version": "1.25.13",
+      "appVersion": "1.25.12",
+      "description": "Dunmir agent — runs from inside a Kubernetes cluster to probe MikroTik routers over RouterOS API/SSH, capture /export to git, pull encrypted backups via SFTP, and report to the Dunmir control plane",
+      "upstream": "https://github.com/magmamoose/dunmir",
+      "image": "ghcr.io/magmamoose/dunmir-agent",
+      "license": "LicenseRef-Proprietary"
     }
   ],
   "publishing": {
@@ -23,6 +33,7 @@
     "workflows": [
       ".github/workflows/ci.yml",
       ".github/workflows/chart-publish.yml",
+      ".github/workflows/quality.yml",
       ".github/workflows/release.yml",
       ".github/workflows/security.yml"
     ]
@@ -52,6 +63,16 @@
     "charts/janeway/templates/pdb.yaml": "optional PodDisruptionBudget",
     "charts/janeway/templates/networkpolicy.yaml": "optional NetworkPolicy",
     "charts/janeway/templates/tests/test-connection.yaml": "helm test pod",
-    "charts/janeway/ci/default-values.yaml": "CI values — exercises all optional features for lint/render"
+    "charts/janeway/ci/default-values.yaml": "CI values — exercises all optional features for lint/render",
+    "charts/dunmir-agent/Chart.yaml": "chart metadata, version, appVersion, proprietary license annotation",
+    "charts/dunmir-agent/values.yaml": "all tunable values — agent config, secrets, PVC, image, ServiceAccount",
+    "charts/dunmir-agent/templates/_helpers.tpl": "shared template helpers",
+    "charts/dunmir-agent/templates/_guards.tpl": "preflight check — fails if secrets.create=false and existingSecretName is unset",
+    "charts/dunmir-agent/templates/deployment.yaml": "single-replica Deployment (Recreate strategy — agent must not run as two pods)",
+    "charts/dunmir-agent/templates/configmap.yaml": "agent config rendered from values into /etc/dunmir/config.yaml",
+    "charts/dunmir-agent/templates/secret.yaml": "secret scaffolding (control-plane token, router credentials)",
+    "charts/dunmir-agent/templates/pvc.yaml": "PersistentVolumeClaim for git-backed config export storage",
+    "charts/dunmir-agent/templates/serviceaccount.yaml": "ServiceAccount (token automount disabled — agent does not call the k8s API)",
+    "charts/dunmir-agent/templates/networkpolicy.yaml": "optional NetworkPolicy"
   }
 }

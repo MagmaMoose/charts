@@ -62,6 +62,8 @@
     "charts/janeway/templates/hpa.yaml": "optional HorizontalPodAutoscaler",
     "charts/janeway/templates/pdb.yaml": "optional PodDisruptionBudget",
     "charts/janeway/templates/networkpolicy.yaml": "optional NetworkPolicy",
+    "charts/janeway/templates/service.yaml": "ClusterIP Service exposing the web pod",
+    "charts/janeway/templates/serviceaccount.yaml": "optional ServiceAccount (automount disabled by default)",
     "charts/janeway/templates/tests/test-connection.yaml": "helm test pod",
     "charts/janeway/ci/default-values.yaml": "CI values — exercises all optional features for lint/render",
     "charts/dunmir-agent/Chart.yaml": "chart metadata, version, appVersion, proprietary license annotation",

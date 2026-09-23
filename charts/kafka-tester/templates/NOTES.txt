@@ -1,0 +1,17 @@
+{{- include "kafka-tester.guards" . -}}
+kafka-tester {{ .Chart.AppVersion }} deployed as {{ include "kafka-tester.fullname" . }}.
+
+{{ if .Values.ingress.enabled -}}
+The UI is at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}/
+{{- end }}
+{{- else -}}
+The UI has no ingress. Reach it with:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kafka-tester.fullname" . }} 8000:{{ .Values.service.port }}
+
+and open http://localhost:8000.
+{{- end }}
+
+The UI has no login, and {{ if .Values.config.allowCustom }}connects to any address it is given{{ else }}connects only to its {{ len .Values.targets }} preset target(s){{ end }}.

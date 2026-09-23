@@ -1,0 +1,103 @@
+# values.schema.json checks the shape of these; templates/_guards.tpl fails the render
+# on combinations that would start a pod with nothing it is allowed to do.
+
+image:
+  repository: ghcr.io/magmamoose/kafka-tester
+  # Empty means the chart's appVersion.
+  tag: ""
+  # sha256:... pins the image by digest as well as tag.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+replicaCount: 1
+
+# Preset targets, offered in the UI's target list. Each needs a name and a bootstrap
+# list (host:port[,host:port...]). tls defaults to false and verify to true.
+targets: []
+# - name: in-cluster
+#   bootstrap: kafka.kafka.svc.cluster.local:9092
+#   description: The plaintext listener, from inside the cluster
+# - name: public
+#   bootstrap: kafka.example.com:443
+#   tls: true
+
+config:
+  # false limits the UI to the targets above. The tester connects wherever it is asked
+  # to, so turn this off anywhere the UI is reachable by people you would not hand a
+  # Kafka client to.
+  allowCustom: true
+  defaultTopic: kafka-tester
+  # Bounds each Kafka request, from 1000 to 120000.
+  timeoutMs: 10000
+  # Create a missing topic, with the broker's defaults, before producing to it.
+  createTopics: true
+  # Where /debug/ip asks for the pod's outbound address. Empty turns that off.
+  ipEchoUrl: https://api.ipify.org
+
+# A private CA for TLS targets, read from a Secret or a ConfigMap you manage. Leave
+# both names empty to verify against the image's system CA store.
+caBundle:
+  secretName: ""
+  configMapName: ""
+  key: ca.crt
+
+# Further environment variables for the container, as a list of EnvVar.
+extraEnv: []
+
+serviceAccount:
+  create: true
+  # The tester never calls the Kubernetes API.
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+# Off by default because the UI has no login. Put your own authentication in front of
+# it before turning this on.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  # - host: kafka-tester.example.com
+  #   paths:
+  #     - path: /
+  #       pathType: Prefix
+  tls: []
+
+# About 80Mi at rest: two gunicorn workers and their Kafka clients.
+resources:
+  requests:
+    cpu: 10m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

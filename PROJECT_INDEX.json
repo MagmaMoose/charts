@@ -20,6 +20,15 @@
       "upstream": "https://github.com/magmamoose/dunmir",
       "image": "ghcr.io/magmamoose/dunmir-agent",
       "license": "LicenseRef-Proprietary"
+    },
+    {
+      "name": "kafka-tester",
+      "path": "charts/kafka-tester",
+      "version": "0.1.0",
+      "appVersion": "v0.0.2",
+      "description": "kafka-tester — a small web UI that checks a Kafka endpoint's health from inside the cluster",
+      "upstream": "https://github.com/MagmaMoose/kafka-tester",
+      "image": "ghcr.io/magmamoose/kafka-tester"
     }
   ],
   "publishing": {

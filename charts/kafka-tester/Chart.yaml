@@ -1,0 +1,38 @@
+apiVersion: v2
+name: kafka-tester
+description: Test any Kafka endpoint's health from a small web UI
+type: application
+
+# version is the CHART version and appVersion is the application version, bumped
+# independently for the reasons given in charts/janeway/Chart.yaml. appVersion is
+# the default image tag, and keeps the leading "v" because Diatreme tags the
+# kafka-tester image `v<version>`: "0.0.2" would name a tag that does not exist.
+version: 0.1.0
+appVersion: "v0.0.2"
+
+home: https://github.com/MagmaMoose/kafka-tester
+sources:
+  - https://github.com/MagmaMoose/charts
+  - https://github.com/MagmaMoose/kafka-tester
+
+keywords:
+  - kafka
+  - connectivity
+  - diagnostics
+  - testing
+
+maintainers:
+  - name: Caleb Sargeant
+    url: https://github.com/CalebSargeant
+
+# kafka-tester itself is Apache-2.0; this chart is MIT, like the rest of this repo.
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/links: |
+    - name: kafka-tester
+      url: https://github.com/MagmaMoose/kafka-tester
+  artifacthub.io/changes: |
+    - kind: added
+      description: First release.

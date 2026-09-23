@@ -16,6 +16,7 @@ Flux points at the same place with a `type: oci` HelmRepository.
 | Chart | |
 |---|---|
 | [janeway](charts/janeway) | [Janeway](https://github.com/openlibhums/janeway) — journal, preprint and book publishing platform |
+| [kafka-tester](charts/kafka-tester) | [kafka-tester](https://github.com/MagmaMoose/kafka-tester): test any Kafka endpoint's health from a small web UI |
 
 ## Conventions
 

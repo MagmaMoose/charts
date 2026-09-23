@@ -124,16 +124,21 @@ jobs:
         run: |
           set -euo pipefail
           assert_fails() {
-            local desc="$1"; shift
-            if helm template t charts/janeway "$@" >/dev/null 2>&1; then
-              echo "::error::guard did not fire: ${desc}"
+            local chart="$1" desc="$2"; shift 2
+            if helm template t "charts/${chart}" "$@" >/dev/null 2>&1; then
+              echo "::error::guard did not fire: ${chart}: ${desc}"
               exit 1
             fi
-            echo "ok: ${desc}"
+            echo "ok: ${chart}: ${desc}"
           }
           creds=(--set database.existingSecret=d --set secretKey.existingSecret=s)
-          assert_fails "missing config.siteDomain" --set database.host=x "${creds[@]}"
-          assert_fails "missing database.host" --set config.siteDomain=a.b "${creds[@]}"
-          assert_fails "missing secretKey" --set config.siteDomain=a.b --set database.host=x --set database.existingSecret=d
-          assert_fails "RWO with replicaCount>1 and no node pinning" \
+          assert_fails janeway "missing config.siteDomain" --set database.host=x "${creds[@]}"
+          assert_fails janeway "missing database.host" --set config.siteDomain=a.b "${creds[@]}"
+          assert_fails janeway "missing secretKey" --set config.siteDomain=a.b --set database.host=x --set database.existingSecret=d
+          assert_fails janeway "RWO with replicaCount>1 and no node pinning" \
             --set config.siteDomain=a.b --set database.host=x "${creds[@]}" --set replicaCount=3
+          assert_fails kafka-tester "custom endpoints off and no targets" --set config.allowCustom=false
+          assert_fails kafka-tester "two targets with one name" \
+            --set-json 'targets=[{"name":"a","bootstrap":"a:1"},{"name":"a","bootstrap":"b:1"}]'
+          assert_fails kafka-tester "CA bundle from both a Secret and a ConfigMap" \
+            --set caBundle.secretName=s --set caBundle.configMapName=c

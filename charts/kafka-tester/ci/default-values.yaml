@@ -1,0 +1,32 @@
+# Values used by CI to render the chart. Not an example deployment: the point is to
+# exercise as many templates as possible, so what is off by default is on here.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+targets:
+  - name: in-cluster
+    bootstrap: kafka-headless.kafka.svc.cluster.local:9092
+    description: The plaintext listener, from inside the cluster
+  - name: public
+    bootstrap: kafka-0.example.com:9093,kafka-1.example.com:9093
+    tls: true
+    verify: false
+config:
+  allowCustom: false
+  timeoutMs: 120000
+caBundle:
+  secretName: kafka-ca
+extraEnv:
+  - name: GUNICORN_CMD_ARGS
+    value: --workers 1
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: kafka-tester.ci.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - kafka-tester.ci.example.com
+      secretName: kafka-tester-tls

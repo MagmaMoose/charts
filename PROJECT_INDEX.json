@@ -1,4 +1,5 @@
 {
+  "generated": "2026-10-07",
   "name": "magmamoose/charts",
   "description": "Helm charts for MagmaMoose infrastructure, published as OCI artifacts to ghcr.io/magmamoose/charts.",
   "charts": [
@@ -84,6 +85,17 @@
     "charts/dunmir-agent/templates/secret.yaml": "secret scaffolding (control-plane token, router credentials)",
     "charts/dunmir-agent/templates/pvc.yaml": "PersistentVolumeClaim for git-backed config export storage",
     "charts/dunmir-agent/templates/serviceaccount.yaml": "ServiceAccount (token automount disabled — agent does not call the k8s API)",
-    "charts/dunmir-agent/templates/networkpolicy.yaml": "optional NetworkPolicy"
+    "charts/dunmir-agent/templates/networkpolicy.yaml": "optional NetworkPolicy",
+    "charts/kafka-tester/Chart.yaml": "chart metadata, version, appVersion",
+    "charts/kafka-tester/values.yaml": "all tunable values with inline documentation",
+    "charts/kafka-tester/values.schema.json": "JSON Schema for values type/enum validation",
+    "charts/kafka-tester/templates/_helpers.tpl": "shared template helpers",
+    "charts/kafka-tester/templates/_guards.tpl": "preflight checks — fail fast on known bad configurations",
+    "charts/kafka-tester/templates/deployment.yaml": "Deployment for the kafka-tester web UI pod",
+    "charts/kafka-tester/templates/service.yaml": "ClusterIP Service exposing the web pod",
+    "charts/kafka-tester/templates/ingress.yaml": "optional Ingress",
+    "charts/kafka-tester/templates/serviceaccount.yaml": "optional ServiceAccount",
+    "charts/kafka-tester/templates/tests/test-connection.yaml": "helm test pod",
+    "charts/kafka-tester/ci/default-values.yaml": "CI values — exercises optional features for lint/render"
   }
 }

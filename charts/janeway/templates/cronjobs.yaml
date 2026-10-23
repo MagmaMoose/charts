@@ -76,14 +76,25 @@ spec:
               volumeMounts:
                 {{- include "janeway.cronJobVolumeMounts" (list $root $job) | nindent 16 }}
           volumes:
-            {{- include "janeway.volumes" $root | nindent 12 }}
+            {{- include "janeway.cronJobVolumes" (list $root $job) | nindent 12 }}
           {{- with $root.Values.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with $root.Values.affinity }}
+          {{- if $root.Values.affinity }}
           affinity:
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml $root.Values.affinity | nindent 12 }}
+          {{- else if and (ne $job.mountFiles false) $root.Values.persistence.enabled (has "ReadWriteOnce" $root.Values.persistence.accessModes) }}
+          # A ReadWriteOnce volume attaches to one node at a time, so a job that
+          # mounts the files PVC has to run on the node where the web pod has it.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      {{- include "janeway.selectorLabels" $root | nindent 22 }}
+                      app.kubernetes.io/component: web
+                  topologyKey: kubernetes.io/hostname
           {{- end }}
           {{- with $root.Values.tolerations }}
           tolerations:

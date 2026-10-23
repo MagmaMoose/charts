@@ -263,3 +263,21 @@ different node than the web pod.
 - name: tmp
   mountPath: /tmp
 {{- end }}
+
+{{/*
+Volumes for CronJob pods. Accepts (list $root $job).
+Skipping the mounts is not enough on its own: a pod that DECLARES the files PVC
+still has it attached to its node, mounted or not, so a mountFiles: false job
+kept hitting Multi-Attach while the web pod held the ReadWriteOnce volume on
+another node. Such jobs get only the tmp volume.
+*/}}
+{{- define "janeway.cronJobVolumes" -}}
+{{- $root := index . 0 -}}
+{{- $job  := index . 1 -}}
+{{- if ne $job.mountFiles false }}
+{{- include "janeway.volumes" $root }}
+{{- else }}
+- name: tmp
+  emptyDir: {}
+{{- end }}
+{{- end }}

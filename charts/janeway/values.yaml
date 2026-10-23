@@ -281,7 +281,13 @@ probes:
 # because a single bundled failure hides the others.
 #
 # Every entry takes: enabled, schedule, command (argv passed to `manage`),
-# and optionally concurrencyPolicy / activeDeadlineSeconds / suspend.
+# and optionally concurrencyPolicy / activeDeadlineSeconds / suspend / mountFiles.
+#
+# mountFiles: false is for jobs that only touch the database. Their pods get no
+# files volume at all: with ReadWriteOnce persistence, merely declaring the PVC
+# attaches it, which collides with the web pod on another node (Multi-Attach).
+# Jobs that do mount it are pinned to the web pod's node for the same reason,
+# unless `affinity` is set, which then applies as-is.
 cronJobs:
   enabled: true
   # Applied to every job unless overridden per job.
@@ -361,6 +367,7 @@ cronJobs:
       enabled: false
       schedule: "45 2 * * *"
       command: ["accesses_to_historic"]
+      mountFiles: false
 
     # Crossref DOI deposit status.
     poll-crossref:

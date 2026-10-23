@@ -43,8 +43,11 @@ survives the next refactor.
 ## Releasing
 
 Push to `main` with a conventional-commit message. Diatreme computes the next
-version, tags it, publishes the GitHub Release, and this repo's workflow then
-packages every chart at that version and pushes it to GHCR.
+repository version, tags it and publishes the GitHub Release. Charts are
+versioned on their own: the publish workflow pushes each chart at the
+`version` in its `Chart.yaml` and skips versions that are already published.
+So a change to a chart ships only if it also bumps that chart's `version`.
+CI fails a pull request that changes a chart without bumping it.
 
 ## Contributing
 

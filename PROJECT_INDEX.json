@@ -1,12 +1,12 @@
 {
-  "generated": "2026-10-07",
+  "generated": "2026-10-28",
   "name": "magmamoose/charts",
   "description": "Helm charts for MagmaMoose infrastructure, published as OCI artifacts to ghcr.io/magmamoose/charts.",
   "charts": [
     {
       "name": "janeway",
       "path": "charts/janeway",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "appVersion": "v0.0.5",
       "description": "Janeway — open-source platform for publishing journals, preprints, conference proceedings and books",
       "upstream": "https://github.com/openlibhums/janeway",

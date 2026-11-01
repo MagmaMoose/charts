@@ -1,17 +1,8 @@
 {
-  "generated": "2026-10-28",
+  "generated": "2026-11-01",
   "name": "magmamoose/charts",
   "description": "Helm charts for MagmaMoose infrastructure, published as OCI artifacts to ghcr.io/magmamoose/charts.",
   "charts": [
-    {
-      "name": "janeway",
-      "path": "charts/janeway",
-      "version": "0.1.9",
-      "appVersion": "v0.0.5",
-      "description": "Janeway — open-source platform for publishing journals, preprints, conference proceedings and books",
-      "upstream": "https://github.com/openlibhums/janeway",
-      "image": "ghcr.io/tengen-systems/janeway"
-    },
     {
       "name": "dunmir-agent",
       "path": "charts/dunmir-agent",
@@ -25,7 +16,7 @@
     {
       "name": "kafka-tester",
       "path": "charts/kafka-tester",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "appVersion": "v0.0.2",
       "description": "kafka-tester — a small web UI that checks a Kafka endpoint's health from inside the cluster",
       "upstream": "https://github.com/MagmaMoose/kafka-tester",
@@ -56,26 +47,6 @@
     "comments explain WHY, not WHAT"
   ],
   "key_files": {
-    "charts/janeway/Chart.yaml": "chart metadata, version, appVersion, annotations",
-    "charts/janeway/values.yaml": "all tunable values with inline documentation",
-    "charts/janeway/values.schema.json": "JSON Schema for values type/enum validation",
-    "charts/janeway/templates/_helpers.tpl": "shared template helpers (name, image, env, volumes, mounts, init containers)",
-    "charts/janeway/templates/_guards.tpl": "preflight checks — fail fast on known bad configurations",
-    "charts/janeway/templates/deployment.yaml": "main web Deployment",
-    "charts/janeway/templates/job-migrate.yaml": "pre-install/pre-upgrade migration hook",
-    "charts/janeway/templates/job-bootstrap.yaml": "post-install/post-upgrade bootstrap hook (Press, Journal, superuser)",
-    "charts/janeway/templates/cronjobs.yaml": "scheduled tasks (execute-cron-tasks, send-reminders, etc.)",
-    "charts/janeway/templates/configmap.yaml": "non-secret application configuration",
-    "charts/janeway/templates/secret.yaml": "secret scaffolding",
-    "charts/janeway/templates/pvc.yaml": "files PersistentVolumeClaim",
-    "charts/janeway/templates/ingress.yaml": "optional Ingress",
-    "charts/janeway/templates/hpa.yaml": "optional HorizontalPodAutoscaler",
-    "charts/janeway/templates/pdb.yaml": "optional PodDisruptionBudget",
-    "charts/janeway/templates/networkpolicy.yaml": "optional NetworkPolicy",
-    "charts/janeway/templates/service.yaml": "ClusterIP Service exposing the web pod",
-    "charts/janeway/templates/serviceaccount.yaml": "optional ServiceAccount (automount disabled by default)",
-    "charts/janeway/templates/tests/test-connection.yaml": "helm test pod",
-    "charts/janeway/ci/default-values.yaml": "CI values — exercises all optional features for lint/render",
     "charts/dunmir-agent/Chart.yaml": "chart metadata, version, appVersion, proprietary license annotation",
     "charts/dunmir-agent/values.yaml": "all tunable values — agent config, secrets, PVC, image, ServiceAccount",
     "charts/dunmir-agent/templates/_helpers.tpl": "shared template helpers",

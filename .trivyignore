@@ -11,8 +11,7 @@ KSV-0011
 KSV0011
 
 # KSV-0125 / KSV0125: Container using an image from an untrusted registry
-# False positive: ghcr.io/tengen-systems/janeway is the intended image source
-# for this chart; the chart exists to deploy Janeway from that registry.
+# False positive: ghcr.io/magmamoose is the intended image source for these charts.
 KSV-0125
 KSV0125
 

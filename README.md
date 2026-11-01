@@ -6,7 +6,7 @@ published as OCI artifacts to `ghcr.io/magmamoose/charts`.
 There is no chart repository to add, no `index.yaml`, and no `gh-pages` branch:
 
 ```bash
-helm install janeway oci://ghcr.io/magmamoose/charts/janeway --version 0.1.0
+helm install kafka-tester oci://ghcr.io/magmamoose/charts/kafka-tester --version 0.1.1
 ```
 
 Flux points at the same place with a `type: oci` HelmRepository.
@@ -15,7 +15,6 @@ Flux points at the same place with a `type: oci` HelmRepository.
 
 | Chart | |
 |---|---|
-| [janeway](charts/janeway) | [Janeway](https://github.com/openlibhums/janeway) — journal, preprint and book publishing platform |
 | [kafka-tester](charts/kafka-tester) | [kafka-tester](https://github.com/MagmaMoose/kafka-tester): test any Kafka endpoint's health from a small web UI |
 
 ## Conventions
@@ -27,10 +26,10 @@ Charts here use `appVersion` as the default image tag, so the two must not be
 forced equal.
 
 **Guards over documentation.** Configuration mistakes that would be slow to
-diagnose in a live cluster — a missing hostname, several replicas on a
-ReadWriteOnce volume with no node pinning — fail `helm template` with the reason
-instead. See `templates/_guards.tpl` in a chart, and the CI job that asserts each
-guard still fires.
+diagnose in a live cluster — custom endpoints off with no targets, two targets
+with one name — fail `helm template` with the reason instead. See
+`templates/_guards.tpl` in a chart, and the CI job that asserts each guard still
+fires.
 
 **`values.schema.json` for shape, guards for context.** JSON Schema validates
 types and enums; it cannot express "this is only wrong given that other value",
@@ -55,6 +54,6 @@ CI fails a pull request that changes a chart without bumping it.
 schemas runs on every pull request. To reproduce locally:
 
 ```bash
-helm lint charts/janeway --values charts/janeway/ci/default-values.yaml
-helm template t charts/janeway --values charts/janeway/ci/default-values.yaml | kubeconform -strict -summary
+helm lint charts/kafka-tester --values charts/kafka-tester/ci/default-values.yaml
+helm template t charts/kafka-tester --values charts/kafka-tester/ci/default-values.yaml | kubeconform -strict -summary
 ```
